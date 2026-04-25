@@ -67,25 +67,11 @@ const Index = () => {
   const [otp, setOtp] = useState("");
   const [otpCountdown, setOtpCountdown] = useState(0);
 
-  // Guest payment form state
-  const [paymentState, setPaymentState] = useState<"form" | "success" | "error">("form");
-  const [paymentSummary, setPaymentSummary] = useState<{
-    type: "mobile_money" | "bank_transfer";
-    method: string | null;
-    phone?: string;
-    accountNumber?: string;
-    reference?: string;
-    amount: number;
-  } | null>(null);
-  const [paymentError, setPaymentError] = useState("");
-  const [paymentType, setPaymentType] = useState<"mobile_money" | "bank_transfer">("mobile_money");
-  const [guestPhone, setGuestPhone] = useState("");
-  const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
-  const [selectedBank, setSelectedBank] = useState<string | null>(null);
-  const [accountNumber, setAccountNumber] = useState("");
-  const [reference, setReference] = useState("");
-  const [amount, setAmount] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  // Payment dialog state (replaces all guest payment form state)
+  const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; isSimulated: boolean; subtitle?: string }>({
+    open: false,
+    isSimulated: false,
+  });
 
   const handleCardToggle = (index: number) => {
     setExpandedCard(expandedCard === index ? null : index);
