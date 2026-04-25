@@ -94,14 +94,13 @@ const ProjectsView = ({ userId, isAdmin = false }: ProjectsViewProps) => {
         colors: ["#d4a017", "#2d8a56", "#7c3aed"],
       });
       
-      toast.success("Church project created successfully!");
       setProjectName("");
       setDescription("");
       setTargetAmount("");
       setShowCreateForm(false);
     },
     onError: (error: any) => {
-      toast.error(error.message || "Failed to create project");
+      console.error("Project create error:", error);
     },
   });
 
