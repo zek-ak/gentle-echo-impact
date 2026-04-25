@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "@/lib/supabase/database";
-import { toast } from "sonner";
+
 
 export interface ChurchSettings {
   id: string;
@@ -102,12 +102,11 @@ export const useUpdateChurchSettings = () => {
       }
     },
     onSuccess: () => {
-      toast.success("Church settings updated");
       qc.invalidateQueries({ queryKey: ["church-settings"] });
       qc.invalidateQueries({ queryKey: ["public-dashboard"] });
     },
     onError: (e: any) => {
-      toast.error(e.message || "Failed to update settings.");
+      console.error("Update church settings error:", e);
     },
   });
 };

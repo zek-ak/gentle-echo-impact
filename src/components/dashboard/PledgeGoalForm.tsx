@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Target, Calendar, Loader2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { createOrUpdatePledge, getCurrentUser } from "@/lib/supabase/database";
-import { toast } from "sonner";
+
 
 interface PledgeGoalFormProps {
   userId?: string;
@@ -29,7 +29,6 @@ const PledgeGoalForm = ({
 
     const amount = parseInt(pledgeAmount, 10);
     if (!amount || amount <= 0) {
-      toast.error("Please enter a valid pledge amount");
       return;
     }
 
@@ -38,14 +37,12 @@ const PledgeGoalForm = ({
     if (!targetUserId) {
       const user = await getCurrentUser();
       if (!user) {
-        toast.error("You must be logged in to make a pledge");
         return;
       }
       targetUserId = user.id;
     }
 
     if (!targetUserId) {
-      toast.error("Unable to identify user");
       return;
     }
 
@@ -59,11 +56,9 @@ const PledgeGoalForm = ({
       }
 
       setShowSuccess(true);
-      toast.success("Pledge saved successfully!");
       onSuccess?.();
     } catch (error: any) {
       console.error("Pledge error:", error);
-      toast.error(error.message || "Failed to save pledge. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
