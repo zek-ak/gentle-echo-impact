@@ -60,7 +60,7 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
         scale: 0.982,
         y: 1,
       }}
-      className="relative overflow-hidden cursor-pointer rounded-[24px] border border-blue-900/40 bg-church-blue/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
+      className="relative overflow-hidden cursor-pointer rounded-2xl sm:rounded-[24px] border border-blue-900/40 bg-church-blue/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
       style={{
         background: "linear-gradient(145deg, rgba(12, 41, 92, 0.98) 0%, rgba(13, 55, 118, 0.98) 45%, rgba(10, 63, 146, 0.9) 100%)",
         backdropFilter: "blur(14px)",
@@ -70,22 +70,22 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
       <div className="relative z-10">
         <motion.div
           layout
-          className="flex items-center justify-between gap-4 px-6 py-6 pr-16"
+          className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-6 pr-12 sm:pr-16"
         >
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white shadow-inner">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 text-white shadow-inner flex-shrink-0">
               {icon}
             </div>
-            <div>
-              <h3 className="text-white font-display text-lg font-semibold tracking-tight">{title}</h3>
+            <div className="min-w-0">
+              <h3 className="text-white font-display text-sm sm:text-lg font-semibold tracking-tight truncate">{title}</h3>
             </div>
           </div>
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}
             transition={{ duration: 0.25, ease }}
-            className="text-white/85"
+            className="text-white/85 flex-shrink-0"
           >
-            <ChevronDown className="w-5 h-5" />
+            <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
           </motion.div>
         </motion.div>
 
@@ -124,7 +124,7 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.28, ease, delay: isExpanded ? 0.05 : 0 }}
-                className="px-6 pb-6 pt-4 border-t border-white/15 max-h-[480px] overflow-y-auto"
+                className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
               >
                 {children}
               </motion.div>

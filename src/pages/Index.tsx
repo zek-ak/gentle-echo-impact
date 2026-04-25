@@ -339,7 +339,7 @@ const totalCollected = data?.total_collected ?? 0;
             isExpanded={expandedCard === 2} 
             onToggle={() => handleCardToggle(2)} 
             index={2}
-            onContributeClick={() => setShowPicker(true)} 
+            onContributeClick={() => setPaymentDialog({ open: true, isSimulated: false })} 
           />
           <CurrentProjectsCard 
             isExpanded={expandedCard === 3} 
