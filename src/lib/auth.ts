@@ -50,11 +50,26 @@ export function clearSession(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
+// Helper: race a promise against a timeout so the UI doesn't hang on slow/cold edge functions
+async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return await Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`${label} imechukua muda mrefu. Tafadhali jaribu tena.`)),
+        ms
+      )
+    ),
+  ]);
+}
+
 export async function signIn(phone: string): Promise<AuthSession> {
   const client = createSupabaseClient();
-  const { data, error } = await client.functions.invoke("sign-in", {
-    body: { phone },
-  });
+  const { data, error } = await withTimeout(
+    client.functions.invoke("sign-in", { body: { phone } }),
+    10000,
+    "Kuingia"
+  );
 
   if (error) throw new Error(error.message || "Failed to sign in");
   if (!data?.success) throw new Error(data?.error || "Failed to sign in");
@@ -72,9 +87,11 @@ export async function signIn(phone: string): Promise<AuthSession> {
 
 export async function sendOtp(phone: string, full_name?: string) {
   const client = createSupabaseClient();
-  const { data, error } = await client.functions.invoke("send-otp", {
-    body: { phone, full_name },
-  });
+  const { data, error } = await withTimeout(
+    client.functions.invoke("send-otp", { body: { phone, full_name } }),
+    15000,
+    "Kutuma OTP"
+  );
 
   if (error) throw new Error(error.message || "Failed to send OTP");
   if (!data?.success) throw new Error(data?.error || "Failed to send OTP");
@@ -83,9 +100,11 @@ export async function sendOtp(phone: string, full_name?: string) {
 
 export async function verifyOtp(phone: string, otp: string, full_name?: string): Promise<AuthSession> {
   const client = createSupabaseClient();
-  const { data, error } = await client.functions.invoke("verify-otp", {
-    body: { phone, otp, full_name },
-  });
+  const { data, error } = await withTimeout(
+    client.functions.invoke("verify-otp", { body: { phone, otp, full_name } }),
+    10000,
+    "Kuthibitisha OTP"
+  );
 
   if (error) throw new Error(error.message || "Failed to verify OTP");
   if (!data?.success) throw new Error(data?.error || "Failed to verify OTP");
