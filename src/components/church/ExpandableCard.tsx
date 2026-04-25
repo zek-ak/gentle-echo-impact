@@ -134,7 +134,16 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
               {icon}
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-white font-display text-sm sm:text-lg font-semibold tracking-tight leading-snug break-words [overflow-wrap:anywhere] whitespace-normal">
+              <h3
+                className="text-white font-display text-sm sm:text-lg font-semibold tracking-tight leading-snug break-words [overflow-wrap:anywhere] whitespace-normal line-clamp-2"
+                title={title}
+                style={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
                 {title}
               </h3>
             </div>
