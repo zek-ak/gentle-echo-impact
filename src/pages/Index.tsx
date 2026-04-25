@@ -1,8 +1,7 @@
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { createSupabaseClient } from "../lib/supabase/client.ts";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Heart, TrendingUp, Users, GraduationCap, Church, Eye, UserCheck, X, Construction, LogIn, UserPlus, MessageCircle, Phone, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowRight, GraduationCap, Church, Eye, UserCheck, X, LogIn, UserPlus, Phone } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import ProgressRing from "@/components/church/ProgressRing";
 import StatsCard from "@/components/church/StatsCard";
@@ -11,8 +10,9 @@ import Header from "@/components/church/Header";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { ChuoKikuuFriendsCard, ImpactCard, CallToActionCard, CurrentProjectsCard } from "@/components/church/ExpandableCard";
+import PaymentDialog from "@/components/payments/PaymentDialog";
 import { usePublicDashboard } from "@/hooks/useChurchData";
-import { normalizePhone, sendOtp, verifyOtp, signIn, getSession, clearSession } from "@/lib/auth";
+import { sendOtp, verifyOtp, signIn, getSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
