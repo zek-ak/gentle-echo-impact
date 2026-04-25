@@ -1,4 +1,4 @@
-import { createSupabaseClient, initializeSupabaseClient } from "@/lib/supabase/client";
+import { createSupabaseClient } from "@/lib/supabase/client";
 
 export interface AuthUser {
   id: string;
@@ -98,9 +98,5 @@ export async function verifyOtp(phone: string, otp: string, full_name?: string):
   };
 
   saveSession(session);
-  
-  // Initialize the Supabase client with the token so RLS policies work
-  initializeSupabaseClient();
-  
   return session;
 }
