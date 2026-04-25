@@ -38,34 +38,90 @@ export type Database = {
         }
         Relationships: []
       }
+      church_settings: {
+        Row: {
+          annual_goal: number
+          best_group_id: string | null
+          best_group_name: string | null
+          best_group_percentage: number | null
+          created_at: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+          year: number
+        }
+        Insert: {
+          annual_goal?: number
+          best_group_id?: string | null
+          best_group_name?: string | null
+          best_group_percentage?: number | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          year: number
+        }
+        Update: {
+          annual_goal?: number
+          best_group_id?: string | null
+          best_group_name?: string | null
+          best_group_percentage?: number | null
+          created_at?: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "church_settings_best_group_id_fkey"
+            columns: ["best_group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contributions: {
         Row: {
           amount: number
+          clickpesa_order_reference: string | null
           created_at: string
+          currency: string | null
           id: string
           method: string | null
+          payment_provider: string | null
           project_id: string | null
           reference: string | null
+          status: string
           updated_at: string
           user_id: string | null
         }
         Insert: {
           amount: number
+          clickpesa_order_reference?: string | null
           created_at?: string
+          currency?: string | null
           id?: string
           method?: string | null
+          payment_provider?: string | null
           project_id?: string | null
           reference?: string | null
+          status?: string
           updated_at?: string
           user_id?: string | null
         }
         Update: {
           amount?: number
+          clickpesa_order_reference?: string | null
           created_at?: string
+          currency?: string | null
           id?: string
           method?: string | null
+          payment_provider?: string | null
           project_id?: string | null
           reference?: string | null
+          status?: string
           updated_at?: string
           user_id?: string | null
         }
