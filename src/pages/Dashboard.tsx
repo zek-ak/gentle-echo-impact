@@ -267,7 +267,13 @@ const Dashboard = () => {
   const bestGroup = (publicData as any)?.best_group;
   const projects = publicData?.current_project ? [publicData.current_project] : [];
 
-  const balance = currentPledge ? Math.max(0, currentPledge.pledge_amount - (profile?.total_contributed || 0)) : 0;
+  // Sum of completed contributions for this user (live from contributions table,
+  // since profile.total_contributed isn't auto-updated by the payment webhook).
+  const userCompletedTotal = contributions
+    .filter((c: any) => c.status === "completed")
+    .reduce((sum: number, c: any) => sum + Number(c.amount || 0), 0);
+  const goalAmount = currentPledge?.pledge_amount ?? profile?.annual_goal ?? 0;
+  const balance = goalAmount > 0 ? Math.max(0, goalAmount - userCompletedTotal) : 0;
   // groupProgress removed
 
 
