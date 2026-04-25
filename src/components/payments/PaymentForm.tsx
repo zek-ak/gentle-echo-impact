@@ -182,7 +182,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
   const handleSubmit = async () => {
     const numericAmount = parseInt(amount, 10);
     if (!numericAmount || numericAmount < 500 || numericAmount > 3_000_000) {
-      toast.error("Enter a valid amount (TZS 500 – 3,000,000)");
+      setErrorMsg("Enter a valid amount (TZS 500 – 3,000,000)");
       return;
     }
 
@@ -198,7 +198,6 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         setSuccessSummary({ amount: numericAmount, type: "bank", method: "Bank" });
         setPaymentState("success");
         fireConfetti();
-        toast.success("Bank payment recorded! (Demo)");
         return;
       }
 
@@ -217,7 +216,6 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
           const msg = (data as { error?: string } | null)?.error || error?.message || "Failed to start payment";
           setPaymentState("error");
           setErrorMsg(msg);
-          toast.error(msg);
           return;
         }
 
@@ -229,7 +227,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         const popup = openCenteredPopup(link, "clickpesa-checkout");
         popupRef.current = popup;
         if (!popup) {
-          toast.error("Popup blocked. Use the 'Open payment page' button below.");
+          setErrorMsg("Popup blocked. Use the 'Open payment page' button below.");
         }
 
         setPaymentState("awaiting_bank");
@@ -244,11 +242,11 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     // ============ MOBILE MONEY FLOW (USSD push) ============
     const cleanPhone = phone.replace(/\s/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
-      toast.error("Enter a valid phone number");
+      setErrorMsg("Enter a valid phone number");
       return;
     }
     if (!selectedMobileMethod) {
-      toast.error("Select a mobile money provider");
+      setErrorMsg("Select a mobile money provider");
       return;
     }
 
@@ -259,7 +257,6 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
       setSuccessSummary({ amount: numericAmount, type: "mobile_money", method: selectedMobileMethod });
       setPaymentState("success");
       fireConfetti();
-      toast.success("Contribution recorded! (Demo)");
       return;
     }
 
@@ -278,14 +275,12 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         const msg = (data as { error?: string } | null)?.error || error?.message || "Failed to start payment";
         setPaymentState("error");
         setErrorMsg(msg);
-        toast.error(msg);
         return;
       }
 
       const orderReference = (data as { orderReference: string }).orderReference;
       setActiveOrderRef(orderReference);
       setPaymentState("pending");
-      toast.success("Check your phone and enter PIN to confirm");
       startPolling(orderReference, "mobile_money", selectedMobileMethod, numericAmount);
     } catch (err) {
       setPaymentState("error");
