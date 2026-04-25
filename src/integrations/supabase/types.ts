@@ -86,6 +86,41 @@ export type Database = {
           },
         ]
       }
+      groups: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          leader_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leader_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          leader_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "groups_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       otp_codes: {
         Row: {
           created_at: string
@@ -151,38 +186,57 @@ export type Database = {
       profiles: {
         Row: {
           access_token: string | null
+          annual_goal: number | null
           created_at: string
           full_name: string
+          group_id: string | null
           id: string
+          level: string | null
           phone: string
           role: string
           token_expires_at: string | null
+          total_contributed: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
           access_token?: string | null
+          annual_goal?: number | null
           created_at?: string
           full_name?: string
+          group_id?: string | null
           id?: string
+          level?: string | null
           phone: string
           role?: string
           token_expires_at?: string | null
+          total_contributed?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
           access_token?: string | null
+          annual_goal?: number | null
           created_at?: string
           full_name?: string
+          group_id?: string | null
           id?: string
+          level?: string | null
           phone?: string
           role?: string
           token_expires_at?: string | null
+          total_contributed?: number | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "profiles_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "profiles_user_id_fkey"
             columns: ["user_id"]
@@ -272,6 +326,48 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          assigned_by: string | null
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          assigned_by?: string | null
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           created_at: string
@@ -298,10 +394,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_current_user_group_id: { Args: never; Returns: string }
       get_public_dashboard: { Args: never; Returns: Json }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role:
+        | "super_admin"
+        | "admin"
+        | "finance_admin"
+        | "group_leader"
+        | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -428,6 +537,14 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: [
+        "super_admin",
+        "admin",
+        "finance_admin",
+        "group_leader",
+        "member",
+      ],
+    },
   },
 } as const
