@@ -301,7 +301,7 @@ const totalCollected = data?.total_collected ?? 0;
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               onClick={() => setShowPicker(true)}
-              className="relative inline-flex items-center gap-4 px-10 py-5 rounded-2xl border border-transparent bg-gradient-to-r from-gold via-amber-500 to-gold bg-size-200 font-semibold text-lg text-white transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] transform hover:-translate-y-1 hover:bg-position-100 active:scale-[0.98] active:border-blue-950 active:border active:bg-gold-dark/95 focus:outline-none focus-visible:border-blue-900 focus-visible:ring-2 focus-visible:ring-blue-900/20 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
+              className="relative inline-flex items-center gap-2 sm:gap-4 px-5 py-2.5 sm:px-10 sm:py-5 rounded-xl sm:rounded-2xl border border-transparent bg-gradient-to-r from-gold via-amber-500 to-gold font-semibold text-sm sm:text-lg text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] focus:outline-none"
               style={{
                 backgroundSize: '200% 100%',
               }}
