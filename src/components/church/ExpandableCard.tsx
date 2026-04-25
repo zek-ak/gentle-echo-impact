@@ -243,7 +243,7 @@ export const CallToActionCard = ({
             e.stopPropagation();
             if (onContributeClick) onContributeClick();
           }}
-          className="relative inline-flex w-full items-center justify-center rounded-xl border border-white/15 bg-gold px-8 py-4 text-base font-semibold text-white transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] transform will-change-transform overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950 hover:-translate-y-0.5 hover:bg-gold-dark/95 active:scale-[0.98] active:bg-gold-dark/90"
+          className="relative inline-flex w-full items-center justify-center rounded-xl border border-white/15 bg-gold px-4 py-2.5 sm:px-8 sm:py-4 text-sm sm:text-base font-semibold text-white transition duration-200 transform overflow-hidden focus:outline-none hover:-translate-y-0.5 hover:bg-gold-dark/95 active:scale-[0.98]"
           style={{
             backgroundImage: 'linear-gradient(135deg, hsl(var(--gold)) 0%, hsl(var(--gold-light)) 100%)',
             boxShadow: 'inset 0 0 0 1px rgba(255, 255, 255, 0.08)',
