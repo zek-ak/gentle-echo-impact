@@ -50,15 +50,6 @@ const Header = () => {
               </Link>
             );
           })}
-          {(session?.user || isSimulated) && (
-            <button
-              onClick={logout}
-              className="ml-2 flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-600 hover:text-church-blue hover:bg-slate-50 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign Out</span>
-            </button>
-          )}
         </nav>
       </div>
     </motion.header>
