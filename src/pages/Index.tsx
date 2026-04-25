@@ -1,0 +1,1149 @@
+
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createSupabaseClient } from "../lib/supabase/client.ts";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, Heart, TrendingUp, Users, GraduationCap, Church, Eye, UserCheck, X, Construction, LogIn, UserPlus, MessageCircle, Phone, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import ProgressRing from "@/components/church/ProgressRing";
+import StatsCard from "@/components/church/StatsCard";
+
+import Header from "@/components/church/Header";
+import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { ChuoKikuuFriendsCard, ImpactCard, CallToActionCard, CurrentProjectsCard } from "@/components/church/ExpandableCard";
+import { usePublicDashboard } from "@/hooks/useChurchData";
+import { normalizePhone, sendOtp, verifyOtp, signIn, getSession, clearSession } from "@/lib/auth";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+const ANNUAL_GOAL = 500000; // Configurable church annual goal
+
+const CATEGORIES = [
+  { id: "church_member", label: "Church Member", icon: Church, description: "Registered church member", requiresAuth: true },
+  { id: "student", label: "Student", icon: GraduationCap, description: "Student member", requiresAuth: true },
+  { id: "visitor", label: "Visitor", icon: Eye, description: "First-time or occasional visitor", requiresAuth: false },
+  { id: "regular", label: "Regular", icon: UserCheck, description: "Regular attendee", requiresAuth: false },
+];
+
+const Index = () => {
+  const { data, isLoading } = usePublicDashboard();
+  const [showPicker, setShowPicker] = useState(false);
+  const [expandedCard, setExpandedCard] = useState<number | null>(null);
+  const [authDropdown, setAuthDropdown] = useState<"signin" | "signup" | null>(null);
+  const [selectedGuestCategory, setSelectedGuestCategory] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  // Hero slideshow state
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const heroImages = [
+    '/home.1.jpg',
+    '/home.2.jpg',
+    '/home.3.jpg',
+  ];
+
+  // Auto-advance slideshow
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % heroImages.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [heroImages.length]);
+
+  // Auto-redirect authenticated users to dashboard (instant)
+  useEffect(() => {
+    const session = getSession();
+    if (session) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, []); 
+
+
+  // Auth form state - simplified to match Auth.tsx
+  const [authLoading, setAuthLoading] = useState(false);
+  const [isSignup, setIsSignup] = useState(true);
+  const [authStep, setAuthStep] = useState<"phone" | "otp" | "password">("phone");
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpCountdown, setOtpCountdown] = useState(0);
+
+  // Guest payment form state
+  const [paymentState, setPaymentState] = useState<"form" | "success" | "error">("form");
+  const [paymentSummary, setPaymentSummary] = useState<{
+    type: "mobile_money" | "bank_transfer";
+    method: string | null;
+    phone?: string;
+    accountNumber?: string;
+    reference?: string;
+    amount: number;
+  } | null>(null);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentType, setPaymentType] = useState<"mobile_money" | "bank_transfer">("mobile_money");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
+  const [selectedBank, setSelectedBank] = useState<string | null>(null);
+  const [accountNumber, setAccountNumber] = useState("");
+  const [reference, setReference] = useState("");
+  const [amount, setAmount] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleCardToggle = (index: number) => {
+    setExpandedCard(expandedCard === index ? null : index);
+  };
+
+  // Auth handlers using Supabase
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (phone.length < 10) {
+      toast.error("Enter valid phone (10+ digits)");
+      return;
+    }
+    
+    if (isSignup && !fullName.trim()) {
+      toast.error("Enter your full name for signup");
+      return;
+    }
+
+    setAuthLoading(true);
+    try {
+      if (isSignup) {
+        // Sign Up: Send OTP
+        await sendOtp(phone, fullName.trim());
+        toast.success("OTP sent to " + phone);
+        setAuthStep("otp");
+        setOtpCountdown(300);
+        startCountdown();
+      } else {
+        // Sign In: Direct login with phone only, NO OTP
+        const session = await signIn(phone);
+        toast.success("Logged in!");
+        navigate("/dashboard", { replace: true });
+      }
+    } catch (err: any) {
+      toast.error(err.message || isSignup ? "Failed to send OTP" : "Failed to sign in");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const verifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 6) {
+      toast.error("Enter 6-digit OTP");
+      return;
+    }
+    setAuthLoading(true);
+    try {
+      const session = await verifyOtp(phone, otp, fullName);
+      toast.success("Logged in!");
+      navigate("/dashboard", { replace: true });
+    } catch (err: any) {
+      toast.error(err.message || "Invalid OTP");
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+// Back to proven otpService flow with setSession → AuthContext listener → dashboard
+
+  const startCountdown = () => {
+    const countdown = setInterval(() => {
+      setOtpCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdown);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const resendOTP = async () => {
+    if (otpCountdown > 0) return;
+    const e = { preventDefault: () => {} } as React.FormEvent;
+    await handlePhoneSubmit(e);
+  };
+
+  const formatCountdown = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Payment helper functions
+  const validatePhoneNumber = (phone: string): boolean => {
+    const tanzanianPhoneRegex = /^255[0-9]{9}$/;
+    return tanzanianPhoneRegex.test(phone.replace(/\s/g, ""));
+  };
+
+  const validateAmount = (amt: number): boolean => {
+    return amt > 0 && amt <= 10000000;
+  };
+
+  const formatPhoneNumber = (value: string): string => {
+    const digits = value.replace(/\D/g, "").slice(0, 12);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
+    if (digits.length <= 9) return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
+  };
+
+  const formatCurrency = (amt: number): string => {
+    return amt.toLocaleString("en-TZ");
+  };
+
+  // Payment simulation states
+  const [paymentStep, setPaymentStep] = useState<"idle" | "sending" | "pending" | "success" | "error">("idle");
+  const [stkPushSent, setStkPushSent] = useState(false);
+
+  const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setGuestPhone(formatted);
+  }, []);
+
+  const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/[^0-9]/g, "");
+    setAmount(value);
+  }, []);
+
+  const pollGuestPaymentStatus = async (orderReference: string, maxAttempts = 60): Promise<string> => {
+    const supabase = createSupabaseClient(getSession()?.access_token);
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      try {
+        const { data, error } = await supabase.functions.invoke("clickpesa-status", {
+          body: { orderReference },
+        });
+        if (error) {
+          console.warn("[guest-payment] status error", error);
+          continue;
+        }
+
+        const status = (data as any)?.status;
+        if (status === "success") return "success";
+        if (status === "failed" || status === "reversed") return status;
+      } catch (err) {
+        console.warn("[guest-payment] status exception", err);
+      }
+    }
+    return "timeout";
+  };
+
+  const handleGuestPaymentSubmit = async () => {
+    const numericAmount = parseInt(amount, 10);
+
+    if (!amount || !validateAmount(numericAmount) || numericAmount < 500) {
+      setPaymentError("Enter a valid amount (min TZS 500, max TZS 10,000,000)");
+      setPaymentState("error");
+      setPaymentStep("error");
+      toast.error("Enter a valid amount (min TZS 500)");
+      return;
+    }
+
+    // Bank transfer: no API call, just display the selected bank details
+    if (paymentType === "bank_transfer") {
+      if (!selectedBank) {
+        toast.error("Please select a bank");
+        return;
+      }
+      setPaymentSummary({
+        type: "bank_transfer",
+        method: selectedBank,
+        accountNumber,
+        reference,
+        amount: numericAmount,
+      });
+      setPaymentState("success");
+      return;
+    }
+
+    // Mobile money: validate phone + provider, then trigger USSD push
+    const cleanPhone = guestPhone.replace(/\s/g, "");
+    if (!cleanPhone || cleanPhone.length < 10) {
+      toast.error("Enter a valid phone number");
+      return;
+    }
+    if (!selectedMobileMethod) {
+      toast.error("Select a mobile money provider");
+      return;
+    }
+
+    setIsProcessing(true);
+    setPaymentStep("sending");
+    setPaymentError("");
+
+    try {
+      const supabase = createSupabaseClient(getSession()?.access_token);
+
+      const { data, error } = await supabase.functions.invoke("clickpesa-initiate", {
+        body: {
+          amount: numericAmount,
+          phone: cleanPhone,
+          userId: null,
+          projectId: null,
+          reference: reference || null,
+        },
+      });
+
+      if (error || !(data as any)?.success) {
+        const msg = (data as any)?.error || error?.message || "Failed to start payment.";
+        setPaymentState("error");
+        setPaymentStep("error");
+        setPaymentError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      const orderReference = (data as any).orderReference;
+
+      // USSD push has been sent — user just confirms on their phone
+      setPaymentStep("pending");
+      setStkPushSent(true);
+      toast.success("Check your phone and enter PIN to confirm");
+
+      const finalStatus = await pollGuestPaymentStatus(orderReference);
+      setStkPushSent(false);
+
+      if (finalStatus === "success") {
+        setPaymentStep("success");
+        setPaymentSummary({
+          type: "mobile_money",
+          method: selectedMobileMethod,
+          phone: cleanPhone,
+          reference,
+          amount: numericAmount,
+        });
+        setPaymentState("success");
+        toast.success("Payment successful! Thank you for your contribution.");
+      } else {
+        setPaymentStep("error");
+        const errorMessage = finalStatus === "timeout"
+          ? "We didn't receive a confirmation in time. Please check your transaction and try again."
+          : "Payment was not completed. Please try again.";
+        setPaymentError(errorMessage);
+        setPaymentState("error");
+        toast.error(errorMessage);
+      }
+    } catch (error: any) {
+      setPaymentStep("error");
+      setPaymentError(error?.message || "An error occurred. Please try again.");
+      setPaymentState("error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+
+  const resetGuestPayment = () => {
+    setPaymentState("form");
+    setPaymentSummary(null);
+    setPaymentError("");
+    setGuestPhone("");
+    setSelectedMobileMethod(null);
+    setSelectedBank(null);
+    setAccountNumber("");
+    setReference("");
+    setAmount("");
+  };
+
+  const closeGuestDashboard = () => {
+    setSelectedGuestCategory(null);
+    resetGuestPayment();
+  };
+
+  const resetAuthForm = () => {
+    setAuthStep("phone");
+    setFullName("");
+    setPhone("");
+    setOtp("");
+    setOtpCountdown(0);
+    setAuthDropdown(null);
+  };
+
+  const handleCategoryClick = (category: typeof CATEGORIES[0]) => {
+    if (category.requiresAuth) {
+      setShowPicker(false);
+      setIsSignup(true); // Default to signup for new members
+      setAuthDropdown("signup");
+    } else {
+      setShowPicker(false);
+      setSelectedGuestCategory(category.id);
+    }
+  };
+
+const totalCollected = data?.total_collected ?? 0;
+  const percentage = ANNUAL_GOAL > 0 ? (totalCollected / ANNUAL_GOAL) * 100 : 0;
+  const currentProject = data?.current_project;
+  const projectPercentage = currentProject
+    ? (currentProject.collected_amount / currentProject.target_amount) * 100
+    : 0;
+  const bestGroup = data?.best_group;
+  const activeMembers = data?.active_members ?? 0;
+
+  // Handle RPC null gracefully
+  if (!data) {
+    // Early return or loading skeleton could be added here
+  }
+
+  const container = {
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.1 } },
+  };
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 },
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      <Header />
+
+      {/* Right Sidebar - SDA Logo Only */}
+      <aside className="fixed top-16 right-0 h-[calc(100vh-4rem)] w-12 lg:w-20 bg-church-blue z-40 flex flex-col items-center pt-4 lg:pt-6 pb-4 lg:pb-8 px-1 lg:px-3 shadow-xl">
+        {/* SDA Logo - With transparent background matching sidebar */}
+        <div className="w-8 h-8 lg:w-12 lg:h-12 p-1 flex items-center justify-center">
+          <img 
+            src="/sdaLogo.png" 
+            alt="SDA Logo" 
+            className="w-full h-full object-contain"
+          />
+        </div>
+      </aside>
+
+      {/* Main Content with right padding for sidebar */}
+      <div className="pr-12 lg:pr-20">
+        {/* Hero Section with Slideshow */}
+        <section
+          className="relative overflow-hidden py-16 sm:py-24"
+        >
+        {/* Slideshow Background */}
+        <div className="absolute inset-0">
+          {heroImages.map((image, index) => (
+            <motion.div
+              key={index}
+              className="absolute inset-0"
+              initial={{ scale: 1.2, opacity: 0 }}
+              animate={{ 
+                scale: index === currentSlide ? 1 : 1.2,
+                opacity: index === currentSlide ? 1 : 0 
+              }}
+              transition={{ duration: 1.5, ease: "easeInOut" }}
+              style={{
+                backgroundImage: `url(${image})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            />
+          ))}
+          {/* Dark gradient overlay for readability */}
+          <div className="absolute inset-0 bg-gradient-to-br from-church-blue/90 via-church-blue/85 to-church-blue-dark/90" />
+        </div>
+
+        {/* Slideshow Indicators */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+          {heroImages.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentSlide(index)}
+              className={cn(
+                "w-2.5 h-2.5 rounded-full transition-all duration-300",
+                index === currentSlide 
+                  ? "bg-gold w-8" 
+                  : "bg-white/40 hover:bg-white/60"
+              )}
+            />
+          ))}
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
+          {/* Church Name Label - Top Left */}
+          <div className="absolute top-0 left-4 sm:left-8 md:left-12">
+            <p className="text-white/70 text-xs sm:text-sm font-light uppercase tracking-widest">
+              Chuo Kikuu SDA Church
+            </p>
+          </div>
+
+          {/* Main Content - Centered */}
+          <div className="flex flex-col items-center justify-center min-h-[60vh] text-center pt-16">
+            <motion.h1 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6 }}
+              className="text-4xl sm:text-5xl lg:text-6xl font-display text-white mb-6 leading-tight"
+            >
+              Resource Mobilization
+            </motion.h1>
+            
+            <motion.p 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="text-white/80 text-base sm:text-lg mb-10 max-w-2xl mx-auto leading-relaxed"
+            >
+              Supporting the Mission of Chuo Kikuu SDA Church by strengthening ministry, empowering spiritual growth, and advancing the work of God through unity, generosity, and faithful service.
+            </motion.p>
+
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              onClick={() => setShowPicker(true)}
+              className="relative inline-flex items-center gap-4 px-10 py-5 rounded-2xl border border-transparent bg-gradient-to-r from-gold via-amber-500 to-gold bg-size-200 font-semibold text-lg text-white transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] transform hover:-translate-y-1 hover:bg-position-100 active:scale-[0.98] active:border-blue-950 active:border active:bg-gold-dark/95 focus:outline-none focus-visible:border-blue-900 focus-visible:ring-2 focus-visible:ring-blue-900/20 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
+              style={{
+                backgroundSize: '200% 100%',
+              }}
+            >
+              <span className="relative tracking-wide">
+                Press Here to Contribute
+              </span>
+            </motion.button>
+          </div>
+        </div>
+      </section>
+      </div>
+
+      {/* Expandable Cards Section */}
+      <section className="container mx-auto px-4 py-16 pr-12 lg:pr-20">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }} 
+          whileInView={{ opacity: 1, y: 0 }} 
+          viewport={{ once: true }}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        >
+          <ChuoKikuuFriendsCard 
+            isExpanded={expandedCard === 0} 
+            onToggle={() => handleCardToggle(0)} 
+            index={0}
+          />
+          <ImpactCard 
+            isExpanded={expandedCard === 1} 
+            onToggle={() => handleCardToggle(1)} 
+            index={1}
+            totalContributed={totalCollected} 
+            activeMembers={activeMembers} 
+          />
+          <CallToActionCard 
+            isExpanded={expandedCard === 2} 
+            onToggle={() => handleCardToggle(2)} 
+            index={2}
+            onContributeClick={() => setShowPicker(true)} 
+          />
+          <CurrentProjectsCard 
+            isExpanded={expandedCard === 3} 
+            onToggle={() => handleCardToggle(3)} 
+            index={3}
+          />
+        </motion.div>
+      </section>
+
+      {/* Category Picker Modal */}
+      <AnimatePresence>
+        {showPicker && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowPicker(false)}
+          >
+            <motion.div
+              className="relative w-[90vw] sm:w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundImage: 'url(/sda_clean_super.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              {/* Dark overlay for readability */}
+              <div className="absolute inset-0 bg-gradient-to-br from-church-blue/90 via-church-blue/85 to-church-blue-dark/90" />
+              
+              {/* Content */}
+              <div className="relative z-10 p-6 sm:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl sm:text-2xl font-display text-white drop-shadow-lg">I am a...</h2>
+                  <button 
+                    onClick={() => setShowPicker(false)} 
+                    className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {CATEGORIES.map((cat) => (
+                    <motion.button
+                      key={cat.id}
+                      onClick={() => handleCategoryClick(cat)}
+                      className="flex items-center gap-4 p-4 rounded-xl bg-white/95 hover:bg-white border border-white/20 hover:border-white/40 transition-all text-left group backdrop-blur-sm"
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="w-12 h-12 rounded-lg bg-church-blue/10 flex items-center justify-center group-hover:bg-church-blue/20 transition-colors">
+                        <cat.icon className="w-6 h-6 text-church-blue" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-foreground">{cat.label}</p>
+                        <p className="text-xs text-muted-foreground">{cat.description}</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto group-hover:text-church-blue transition-colors" />
+                    </motion.button>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Auth Dropdown - Matching categories dropdown style */}
+      <AnimatePresence>
+        {authDropdown && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => { setAuthDropdown(null); resetAuthForm(); }}
+          >
+            <motion.div
+              className="relative w-[90vw] sm:w-full max-w-md rounded-3xl shadow-2xl overflow-hidden"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundImage: 'url(/sda_clean_super.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              {/* Dark overlay for readability */}
+              <div className="absolute inset-0 bg-gradient-to-br from-church-blue/90 via-church-blue/85 to-church-blue-dark/90" />
+              
+              {/* Content */}
+              <div className="relative z-10 p-6 sm:p-8">
+                <div className="text-center mb-8">
+                  <div className="w-16 h-16 mx-auto mb-4 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-xl">
+                    <Phone className="w-8 h-8 text-white" />
+                  </div>
+                  <h1 className="text-2xl font-bold text-white mb-2 drop-shadow-lg">
+                    {authStep === "otp" ? "Enter Code" : isSignup ? "Sign Up" : "Sign In"}
+                  </h1>
+                  <p className="text-white/80 text-sm drop-shadow-lg">
+                    {authStep === "otp" ? `OTP sent to ${phone}. Enter code to continue.` : isSignup ? "Enter name and phone to receive OTP" : "Enter phone to sign in directly"}
+                  </p>
+
+                {authStep === "phone" && (
+                  <div className="flex items-center justify-center gap-2 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsSignup(true)}
+                      className={`px-3 py-1 text-xs rounded-full transition-colors flex items-center gap-1 ${
+                        isSignup
+                          ? "bg-gold text-primary font-semibold"
+                          : "bg-white/20 text-white/70"
+                      }`}
+                    >
+                      <UserPlus className="w-3 h-3" />
+                      Sign Up
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsSignup(false)}
+                      className={`px-3 py-1 text-xs rounded-full transition-colors flex items-center gap-1 ${
+                        !isSignup
+                          ? "bg-gold text-primary font-semibold"
+                          : "bg-white/20 text-white/70"
+                      }`}
+                    >
+                      <LogIn className="w-3 h-3" />
+                      Sign In
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {authStep === "phone" ? (
+                <form onSubmit={handlePhoneSubmit} className="space-y-4">
+                  {isSignup && (
+                    <Input
+                      placeholder="Full Name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="h-14 text-lg text-center rounded-2xl bg-white/90 backdrop-blur-sm border-2 border-white/30 focus:border-gold focus:ring-2 focus:ring-gold/30"
+                    />
+                  )}
+                  <Input
+                    type="tel"
+                    placeholder={isSignup ? "0712345678 or 255712345678" : "0712345678"}
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ''))}
+                    className="h-14 text-lg text-center rounded-2xl bg-white/90 backdrop-blur-sm border-2 border-white/30 focus:border-gold focus:ring-2 focus:ring-gold/30"
+                  />
+
+                  <motion.button
+                    type="submit"
+                    disabled={authLoading}
+                    className="w-full h-14 rounded-2xl bg-gradient-to-r from-gold to-amber-500 text-white font-semibold text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    {authLoading ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        {isSignup ? "Sending OTP..." : "Signing In..."}
+                      </span>
+                    ) : (
+                      isSignup ? "Send OTP" : "Sign In"
+                    )}
+                  </motion.button>
+                </form>
+              ) : (
+                <form onSubmit={verifyOTP} className="space-y-4">
+                  <div className="flex justify-center mb-4">
+                    <InputOTP
+                      value={otp}
+                      onChange={setOtp}
+                      maxLength={6}
+                      className="gap-2"
+                    >
+                      <InputOTPGroup>
+                        <InputOTPSlot index={0} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                        <InputOTPSlot index={1} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                        <InputOTPSlot index={2} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                        <InputOTPSlot index={3} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                        <InputOTPSlot index={4} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                        <InputOTPSlot index={5} className="h-14 w-12 bg-white/90 backdrop-blur-sm rounded-xl border-2 border-white/30 text-lg font-mono tracking-widest" />
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  <motion.button
+                    type="submit"
+                    disabled={authLoading || otp.length !== 6}
+                    className="w-full h-14 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold text-lg shadow-xl hover:shadow-2xl hover:-translate-y-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    {authLoading ? (
+                      <span className="flex items-center gap-2">
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Verifying...
+                      </span>
+                    ) : (
+                      "Continue to Dashboard"
+                    )}
+                  </motion.button>
+                  <div className="flex items-center justify-center gap-2 text-xs text-white/70">
+                    <span>Didn't get code?</span>
+                    <button
+                      type="button"
+                      onClick={resendOTP}
+                      disabled={otpCountdown > 0 || authLoading}
+                      className="text-gold hover:text-gold/80 font-semibold transition-colors disabled:opacity-50"
+                    >
+                      {otpCountdown > 0 ? formatCountdown(otpCountdown) : "Resend"}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthStep("phone");
+                      setFullName("");
+                      setPhone("");
+                      setOtp("");
+                    }}
+                    className="w-full text-white/70 hover:text-white text-sm transition-colors py-2"
+                  >
+                    Change Details
+                  </button>
+                </form>
+              )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Guest Dashboard Dropdown - Inline Payment Form */}
+      <AnimatePresence>
+        {selectedGuestCategory && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={closeGuestDashboard}
+          >
+            <motion.div
+              className="relative w-[90vw] sm:w-full max-w-md p-6 sm:p-8 rounded-3xl text-center overflow-hidden max-h-[90vh] overflow-y-auto"
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                backgroundImage: 'url(/sda_clean_super.png)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat',
+              }}
+            >
+              {/* Gradient Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-church-blue/90 via-church-blue/85 to-church-blue-dark/90" />
+              
+              {/* Content */}
+              <div className="relative z-10">
+                {/* Header with Close Button */}
+                <div className="flex items-center justify-between mb-4">
+                  <button 
+                    onClick={closeGuestDashboard}
+                    className="flex items-center gap-1 text-white/80 hover:text-white transition-colors text-sm"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
+                  </button>
+                  <button 
+                    onClick={closeGuestDashboard}
+                    className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Title */}
+                <motion.div
+                  className="w-14 h-14 rounded-2xl bg-white/95 flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden"
+                  animate={{ rotate: [0, 5, -5, 0] }}
+                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                >
+                  <img src="/sda_clean_super.png" alt="SDA Logo" className="w-9 h-9 object-contain" />
+                </motion.div>
+
+                <h1 className="text-2xl font-display text-white mb-1">
+                  Chuo Kikuu SDA Church
+                </h1>
+                <p className="text-xs font-semibold text-gold-light mb-4">
+                  {selectedGuestCategory === "visitor" ? "Welcome Visitor!" : "Welcome Regular Attendee!"}
+                </p>
+
+                {/* Payment Form or Status */}
+                <AnimatePresence mode="wait">
+                  {paymentState === "form" && (
+                    <motion.div
+                      key="form"
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 20 }}
+                      className="space-y-4"
+                    >
+                      {/* Payment Processing Status */}
+                      {paymentStep === "sending" && (
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 text-center">
+                          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gold/20 flex items-center justify-center">
+                            <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                          </div>
+                          <p className="text-white text-sm font-medium">Sending payment request...</p>
+                        </div>
+                      )}
+
+                      {paymentStep === "pending" && stkPushSent && (
+                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-gold/30 text-center animate-pulse">
+                          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                            <Phone className="w-6 h-6 text-emerald-400" />
+                          </div>
+                          <p className="text-white text-sm font-medium mb-1">STK Push Sent!</p>
+                          <p className="text-white/60 text-xs">Check your phone and enter PIN to confirm</p>
+                          <div className="mt-3 flex justify-center gap-1">
+                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '0ms' }} />
+                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '150ms' }} />
+                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '300ms' }} />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Payment Type Tabs */}
+                      {(paymentStep === "idle" || paymentStep === "sending" || paymentStep === "pending") && (
+                        <div className="flex rounded-xl bg-white/10 p-1 border border-white/10">
+                          <button
+                            type="button"
+                            onClick={() => { setPaymentType("mobile_money"); setPaymentStep("idle"); }}
+                            disabled={isProcessing}
+                            className={cn(
+                              "flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
+                              paymentType === "mobile_money"
+                                ? "bg-white text-primary shadow-md"
+                                : "text-white/70 hover:text-white hover:bg-white/5"
+                            )}
+                          >
+                            Mobile Money
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setPaymentType("bank_transfer"); setPaymentStep("idle"); }}
+                            disabled={isProcessing}
+                            className={cn(
+                              "flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
+                              paymentType === "bank_transfer"
+                                ? "bg-white text-primary shadow-md"
+                                : "text-white/70 hover:text-white hover:bg-white/5"
+                            )}
+                          >
+                            Bank Transfer
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Mobile Money Fields */}
+                      {paymentType === "mobile_money" && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-sm font-semibold text-white">Phone Number</label>
+                            <input
+                              type="tel"
+                              value={guestPhone}
+                              onChange={handlePhoneChange}
+                              placeholder="2557XXXXXXXX"
+                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
+                              maxLength={16}
+                              inputMode="numeric"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-semibold text-white">
+                              Reference Note <span className="text-white/40 font-normal">(Optional)</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={reference}
+                              onChange={(e) => setReference(e.target.value)}
+                              placeholder="e.g., Tithe, Offering"
+                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-semibold text-white">Mobile Money Provider</label>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { id: "mpesa", name: "M-Pesa" },
+                                { id: "tigopesa", name: "Tigo Pesa" },
+                                { id: "airtel", name: "Airtel Money" },
+                                { id: "halopesa", name: "HaloPesa" },
+                              ].map((method) => (
+                                <motion.button
+                                  key={method.id}
+                                  type="button"
+                                  onClick={() => setSelectedMobileMethod(method.id)}
+                                  whileHover={{ scale: 1.02 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  className={cn(
+                                    "relative p-2 rounded-lg border-2 transition-all duration-200 text-center",
+                                    selectedMobileMethod === method.id
+                                      ? "border-gold bg-gold/10"
+                                      : "border-white/20 bg-white/5 hover:border-white/40"
+                                  )}
+                                >
+                                  <span className="font-medium text-white text-xs">{method.name}</span>
+                                  {selectedMobileMethod === method.id && (
+                                    <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-gold flex items-center justify-center">
+                                      <CheckCircle2 className="w-2 h-2 text-primary" />
+                                    </div>
+                                  )}
+                                </motion.button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bank Transfer Fields */}
+                      {paymentType === "bank_transfer" && (
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-sm font-semibold text-white">Select Bank</label>
+                            <div className="grid grid-cols-1 gap-2">
+                              {[
+                                { id: "crdb", name: "CRDB Bank", acc: "02XXXXXXXXXXXX" },
+                                { id: "nmb", name: "NMB Bank", acc: "XXXXXXXXXX" },
+                                { id: "nbc", name: "NBC Bank", acc: "XXXXXXXXXXXX" },
+                              ].map((bank) => (
+                                <motion.button
+                                  key={bank.id}
+                                  type="button"
+                                  onClick={() => setSelectedBank(bank.id)}
+                                  whileHover={{ scale: 1.01 }}
+                                  whileTap={{ scale: 0.99 }}
+                                  className={cn(
+                                    "relative p-3 rounded-lg border-2 transition-all duration-200 text-left",
+                                    selectedBank === bank.id
+                                      ? "border-gold bg-gold/10"
+                                      : "border-white/20 bg-white/5 hover:border-white/40"
+                                  )}
+                                >
+                                  <span className="font-semibold text-white text-sm block">{bank.name}</span>
+                                  <span className="text-xs text-white/50">Acc: {bank.acc}</span>
+                                  {selectedBank === bank.id && (
+                                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-gold flex items-center justify-center">
+                                      <CheckCircle2 className="w-2 h-2 text-primary" />
+                                    </div>
+                                  )}
+                                </motion.button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-semibold text-white">Account Number</label>
+                            <input
+                              type="text"
+                              value={accountNumber}
+                              onChange={(e) => setAccountNumber(e.target.value)}
+                              placeholder="Enter your account number"
+                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Amount Input */}
+                      <div className="space-y-1">
+                        <label className="text-sm font-semibold text-white">Amount (TZS)</label>
+                        <div className="relative">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-muted-foreground font-medium">
+                            TZS
+                          </span>
+                          <input
+                            type="text"
+                            value={amount ? formatCurrency(parseInt(amount, 10) || 0) : ""}
+                            onChange={handleAmountChange}
+                            placeholder="0"
+                            className="w-full h-11 pl-16 pr-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
+                            inputMode="numeric"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Submit Button */}
+                      <motion.button
+                        type="button"
+                        onClick={handleGuestPaymentSubmit}
+                        disabled={isProcessing}
+                        whileHover={!isProcessing ? { scale: 1.01 } : {}}
+                        whileTap={!isProcessing ? { scale: 0.99 } : {}}
+                        className={cn(
+                          "w-full h-11 rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2",
+                          isProcessing
+                            ? "bg-white/20 text-white/50 cursor-not-allowed"
+                            : "gradient-gold text-primary-foreground shadow-lg shadow-gold/25"
+                        )}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          "Contribute Now"
+                        )}
+                      </motion.button>
+
+                      <p className="text-center text-xs text-white/40">@Chuo Kikuu SDA</p>
+                    </motion.div>
+                  )}
+
+                  {paymentState === "success" && paymentSummary && (
+                    <motion.div
+                      key="success"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="text-center py-4"
+                    >
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 200, damping: 15 }}
+                        className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30"
+                      >
+                        <CheckCircle2 className="w-8 h-8 text-white" />
+                      </motion.div>
+                      <h2 className="text-xl font-display text-white mb-2">
+                        {paymentSummary.type === "mobile_money" ? "Contribution Initiated!" : "Bank Transfer Details!"}
+                      </h2>
+                      <p className="text-xs text-white/70 mb-4">
+                        {paymentSummary.type === "mobile_money" 
+                          ? "A payment request has been sent to your phone."
+                          : "Please use the bank details below to make your transfer."
+                        }
+                      </p>
+                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 mb-4 text-left border border-white/10">
+                        <div className="flex justify-between py-1.5 border-b border-white/10 text-xs">
+                          <span className="text-white/60">Amount</span>
+                          <span className="font-semibold text-gold-light">
+                            TZS {formatCurrency(paymentSummary.amount)}
+                          </span>
+                        </div>
+                      </div>
+                      <motion.button
+                        onClick={resetGuestPayment}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full py-2.5 px-4 rounded-xl gradient-gold text-white font-semibold transition-all shadow-lg text-sm"
+                      >
+                        Make Another Contribution
+                      </motion.button>
+                    </motion.div>
+                  )}
+
+                  {paymentState === "error" && (
+                    <motion.div
+                      key="error"
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -20 }}
+                      className="text-center py-4"
+                    >
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/30">
+                        <X className="w-8 h-8 text-white" />
+                      </div>
+                      <h2 className="text-xl font-display text-white mb-2">Contribution Failed</h2>
+                      <p className="text-xs text-white/70 mb-4">{paymentError}</p>
+                      <motion.button
+                        onClick={() => setPaymentState("form")}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="w-full py-2.5 px-4 rounded-xl gradient-gold text-white font-semibold transition-all shadow-lg text-sm"
+                      >
+                        Try Again
+                      </motion.button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Footer */}
+      <footer className="bg-church-blue border-t border-church-blue-dark py-8 pr-12 lg:pr-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center">
+            <h3 className="text-white font-display text-lg mb-2">Seventh Day Adventist Church CHUO KIKUU</h3>
+            <p className="text-white/70 text-sm">
+              © Copyright @2026 CHUO KIKUU SDA CHURCH
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default Index;
