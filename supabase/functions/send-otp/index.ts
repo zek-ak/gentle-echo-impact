@@ -79,6 +79,8 @@ Deno.serve(async (req) => {
     const nextsmsPassword = Deno.env.get("NEXTSMS_PASSWORD")!;
     const basicAuth = btoa(`${nextsmsUsername}:${nextsmsPassword}`);
 
+    const otpSenderId = "NEXTSMS";
+
     const smsResponse = await fetch(
       "https://messaging-service.co.tz/api/sms/v1/text/single",
       {
@@ -89,11 +91,11 @@ Deno.serve(async (req) => {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          // NEXTSMS ni default sender ID inayofanya kazi mitandao yote
-          // (Vodacom, Airtel, Tigo, Halotel, TTCL, Zantel).
-          // Sender ID nyingine (mfano "CHUOKKUUSDA") lazima isajiliwe
-          // kwa kila mtandao kupitia NextSMS dashboard.
-          from: Deno.env.get("NEXTSMS_SENDER_ID") || "NEXTSMS",
+          // Kwa OTP tunatumia NEXTSMS moja kwa moja kwa sababu ndiyo
+          // sender inayoruhusiwa kufanya delivery across all Tanzania networks.
+          // Sender ID za biashara zinaweza kufanya kazi kwa mtandao mmoja tu
+          // kama hazijasajiliwa kwa Airtel/Tigo/Halotel/TTCL/Zantel.
+          from: otpSenderId,
           to: normalizedPhone,
           text: `Your OTP code is: ${otp}. Itaisha muda baada ya dakika 5.`,
         }),
