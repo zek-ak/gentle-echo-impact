@@ -171,11 +171,16 @@ const Index = () => {
   const handleCategoryClick = (category: typeof CATEGORIES[0]) => {
     if (category.requiresAuth) {
       setShowPicker(false);
-      setIsSignup(true); // Default to signup for new members
+      setIsSignup(true);
       setAuthDropdown("signup");
     } else {
       setShowPicker(false);
       setSelectedGuestCategory(category.id);
+      setPaymentDialog({
+        open: true,
+        isSimulated: false,
+        subtitle: category.id === "visitor" ? "Welcome Visitor!" : "Welcome Regular Attendee!",
+      });
     }
   };
 
