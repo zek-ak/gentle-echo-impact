@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle2, X, Loader2, Phone, Building2, ExternalLink } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { getSession } from "@/lib/auth";
-import { toast } from "sonner";
+
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
