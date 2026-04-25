@@ -9,8 +9,8 @@ const corsHeaders = {
 };
 
 const CLICKPESA_BASE = "https://api.clickpesa.com";
-const CLIENT_ID = Deno.env.get("CLICKPESA_CLIENT_ID")!;
-const API_KEY = Deno.env.get("CLICKPESA_API_KEY")!;
+const CLIENT_ID = Deno.env.get("CLICKPESA_HOSTED_CLIENT_ID") ?? Deno.env.get("CLICKPESA_CLIENT_ID")!;
+const API_KEY = Deno.env.get("CLICKPESA_HOSTED_API_KEY") ?? Deno.env.get("CLICKPESA_API_KEY")!;
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
