@@ -23,8 +23,7 @@ export const usePublicDashboard = () => {
       const { data, error } = await getSupabaseClient().rpc("get_public_dashboard");
       if (error) {
         console.error("Failed to fetch public dashboard RPC:", error.message);
-        // Return null to force real data or error state - no more mocks
-        return null;
+        return null as unknown as PublicDashboardData;
       }
       return data as unknown as PublicDashboardData;
     },
