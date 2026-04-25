@@ -89,9 +89,13 @@ Deno.serve(async (req) => {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          from: "CHUOKKUUSDA",
+          // NEXTSMS ni default sender ID inayofanya kazi mitandao yote
+          // (Vodacom, Airtel, Tigo, Halotel, TTCL, Zantel).
+          // Sender ID nyingine (mfano "CHUOKKUUSDA") lazima isajiliwe
+          // kwa kila mtandao kupitia NextSMS dashboard.
+          from: Deno.env.get("NEXTSMS_SENDER_ID") || "NEXTSMS",
           to: normalizedPhone,
-          text: `Your OTP code is: ${otp}`,
+          text: `Your OTP code is: ${otp}. Itaisha muda baada ya dakika 5.`,
         }),
       }
     );

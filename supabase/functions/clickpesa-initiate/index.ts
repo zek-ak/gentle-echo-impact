@@ -13,7 +13,10 @@ const corsHeaders = {
 const CLICKPESA_BASE = "https://api.clickpesa.com";
 const CLIENT_ID = Deno.env.get("CLICKPESA_CLIENT_ID")!;
 const API_KEY = Deno.env.get("CLICKPESA_API_KEY")!;
+// Checksum imezimwa — ClickPesa account hii haijawekewa checksum validation.
+// Kama itahitajika baadaye, weka CLICKPESA_CHECKSUM_KEY na ubadilishe USE_CHECKSUM = true.
 const CHECKSUM_KEY = Deno.env.get("CLICKPESA_CHECKSUM_KEY") ?? "";
+const USE_CHECKSUM = false;
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
@@ -140,7 +143,7 @@ Deno.serve(async (req) => {
       orderReference,
       phoneNumber: cleanPhone,
     };
-    if (CHECKSUM_KEY) previewPayload.checksum = await buildChecksum(previewPayload);
+    if (USE_CHECKSUM && CHECKSUM_KEY) previewPayload.checksum = await buildChecksum(previewPayload);
 
     console.log("[clickpesa] preview USSD", { orderReference, amount: numAmount, phone: cleanPhone });
 
@@ -177,7 +180,7 @@ Deno.serve(async (req) => {
       orderReference,
       phoneNumber: cleanPhone,
     };
-    if (CHECKSUM_KEY) initiatePayload.checksum = await buildChecksum(initiatePayload);
+    if (USE_CHECKSUM && CHECKSUM_KEY) initiatePayload.checksum = await buildChecksum(initiatePayload);
 
     const initiateRes = await fetch(
       `${CLICKPESA_BASE}/third-parties/payments/initiate-ussd-push-request`,
