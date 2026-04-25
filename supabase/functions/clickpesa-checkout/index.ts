@@ -81,8 +81,8 @@ Deno.serve(async (req) => {
     const token = await generateToken();
 
     const checkoutPayload: Record<string, unknown> = {
-      amount: String(numAmount),
-      currency: "TZS",
+      totalPrice: String(numAmount),
+      orderCurrency: "TZS",
       orderReference,
     };
     if (customerName) checkoutPayload.customerName = customerName;
