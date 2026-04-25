@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "@/lib/supabase/database";
-import { toast } from "sonner";
+
 
 export interface ChurchSettings {
   id: string;
