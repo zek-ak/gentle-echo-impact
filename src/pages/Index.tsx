@@ -1,8 +1,7 @@
 
-import { useState, useRef, useEffect, useCallback } from "react";
-import { createSupabaseClient } from "../lib/supabase/client.ts";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Heart, TrendingUp, Users, GraduationCap, Church, Eye, UserCheck, X, Construction, LogIn, UserPlus, MessageCircle, Phone, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowRight, GraduationCap, Church, Eye, UserCheck, X, LogIn, UserPlus, Phone } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import ProgressRing from "@/components/church/ProgressRing";
 import StatsCard from "@/components/church/StatsCard";
@@ -11,8 +10,9 @@ import Header from "@/components/church/Header";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { ChuoKikuuFriendsCard, ImpactCard, CallToActionCard, CurrentProjectsCard } from "@/components/church/ExpandableCard";
+import PaymentDialog from "@/components/payments/PaymentDialog";
 import { usePublicDashboard } from "@/hooks/useChurchData";
-import { normalizePhone, sendOtp, verifyOtp, signIn, getSession, clearSession } from "@/lib/auth";
+import { sendOtp, verifyOtp, signIn, getSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -67,25 +67,11 @@ const Index = () => {
   const [otp, setOtp] = useState("");
   const [otpCountdown, setOtpCountdown] = useState(0);
 
-  // Guest payment form state
-  const [paymentState, setPaymentState] = useState<"form" | "success" | "error">("form");
-  const [paymentSummary, setPaymentSummary] = useState<{
-    type: "mobile_money" | "bank_transfer";
-    method: string | null;
-    phone?: string;
-    accountNumber?: string;
-    reference?: string;
-    amount: number;
-  } | null>(null);
-  const [paymentError, setPaymentError] = useState("");
-  const [paymentType, setPaymentType] = useState<"mobile_money" | "bank_transfer">("mobile_money");
-  const [guestPhone, setGuestPhone] = useState("");
-  const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
-  const [selectedBank, setSelectedBank] = useState<string | null>(null);
-  const [accountNumber, setAccountNumber] = useState("");
-  const [reference, setReference] = useState("");
-  const [amount, setAmount] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  // Payment dialog state (replaces all guest payment form state)
+  const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; isSimulated: boolean; subtitle?: string }>({
+    open: false,
+    isSimulated: false,
+  });
 
   const handleCardToggle = (index: number) => {
     setExpandedCard(expandedCard === index ? null : index);
@@ -171,185 +157,7 @@ const Index = () => {
   };
 
   // Payment helper functions
-  const validatePhoneNumber = (phone: string): boolean => {
-    const tanzanianPhoneRegex = /^255[0-9]{9}$/;
-    return tanzanianPhoneRegex.test(phone.replace(/\s/g, ""));
-  };
 
-  const validateAmount = (amt: number): boolean => {
-    return amt > 0 && amt <= 10000000;
-  };
-
-  const formatPhoneNumber = (value: string): string => {
-    const digits = value.replace(/\D/g, "").slice(0, 12);
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 3)} ${digits.slice(3)}`;
-    if (digits.length <= 9) return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
-    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
-  };
-
-  const formatCurrency = (amt: number): string => {
-    return amt.toLocaleString("en-TZ");
-  };
-
-  // Payment simulation states
-  const [paymentStep, setPaymentStep] = useState<"idle" | "sending" | "pending" | "success" | "error">("idle");
-  const [stkPushSent, setStkPushSent] = useState(false);
-
-  const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setGuestPhone(formatted);
-  }, []);
-
-  const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/[^0-9]/g, "");
-    setAmount(value);
-  }, []);
-
-  const pollGuestPaymentStatus = async (orderReference: string, maxAttempts = 60): Promise<string> => {
-    const supabase = createSupabaseClient(getSession()?.access_token);
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      try {
-        const { data, error } = await supabase.functions.invoke("clickpesa-status", {
-          body: { orderReference },
-        });
-        if (error) {
-          console.warn("[guest-payment] status error", error);
-          continue;
-        }
-
-        const status = (data as any)?.status;
-        if (status === "success") return "success";
-        if (status === "failed" || status === "reversed") return status;
-      } catch (err) {
-        console.warn("[guest-payment] status exception", err);
-      }
-    }
-    return "timeout";
-  };
-
-  const handleGuestPaymentSubmit = async () => {
-    const numericAmount = parseInt(amount, 10);
-
-    if (!amount || !validateAmount(numericAmount) || numericAmount < 500) {
-      setPaymentError("Enter a valid amount (min TZS 500, max TZS 10,000,000)");
-      setPaymentState("error");
-      setPaymentStep("error");
-      toast.error("Enter a valid amount (min TZS 500)");
-      return;
-    }
-
-    // Bank transfer: no API call, just display the selected bank details
-    if (paymentType === "bank_transfer") {
-      if (!selectedBank) {
-        toast.error("Please select a bank");
-        return;
-      }
-      setPaymentSummary({
-        type: "bank_transfer",
-        method: selectedBank,
-        accountNumber,
-        reference,
-        amount: numericAmount,
-      });
-      setPaymentState("success");
-      return;
-    }
-
-    // Mobile money: validate phone + provider, then trigger USSD push
-    const cleanPhone = guestPhone.replace(/\s/g, "");
-    if (!cleanPhone || cleanPhone.length < 10) {
-      toast.error("Enter a valid phone number");
-      return;
-    }
-    if (!selectedMobileMethod) {
-      toast.error("Select a mobile money provider");
-      return;
-    }
-
-    setIsProcessing(true);
-    setPaymentStep("sending");
-    setPaymentError("");
-
-    try {
-      const supabase = createSupabaseClient(getSession()?.access_token);
-
-      const { data, error } = await supabase.functions.invoke("clickpesa-initiate", {
-        body: {
-          amount: numericAmount,
-          phone: cleanPhone,
-          userId: null,
-          projectId: null,
-          reference: reference || null,
-        },
-      });
-
-      if (error || !(data as any)?.success) {
-        const msg = (data as any)?.error || error?.message || "Failed to start payment.";
-        setPaymentState("error");
-        setPaymentStep("error");
-        setPaymentError(msg);
-        toast.error(msg);
-        return;
-      }
-
-      const orderReference = (data as any).orderReference;
-
-      // USSD push has been sent — user just confirms on their phone
-      setPaymentStep("pending");
-      setStkPushSent(true);
-      toast.success("Check your phone and enter PIN to confirm");
-
-      const finalStatus = await pollGuestPaymentStatus(orderReference);
-      setStkPushSent(false);
-
-      if (finalStatus === "success") {
-        setPaymentStep("success");
-        setPaymentSummary({
-          type: "mobile_money",
-          method: selectedMobileMethod,
-          phone: cleanPhone,
-          reference,
-          amount: numericAmount,
-        });
-        setPaymentState("success");
-        toast.success("Payment successful! Thank you for your contribution.");
-      } else {
-        setPaymentStep("error");
-        const errorMessage = finalStatus === "timeout"
-          ? "We didn't receive a confirmation in time. Please check your transaction and try again."
-          : "Payment was not completed. Please try again.";
-        setPaymentError(errorMessage);
-        setPaymentState("error");
-        toast.error(errorMessage);
-      }
-    } catch (error: any) {
-      setPaymentStep("error");
-      setPaymentError(error?.message || "An error occurred. Please try again.");
-      setPaymentState("error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-
-  const resetGuestPayment = () => {
-    setPaymentState("form");
-    setPaymentSummary(null);
-    setPaymentError("");
-    setGuestPhone("");
-    setSelectedMobileMethod(null);
-    setSelectedBank(null);
-    setAccountNumber("");
-    setReference("");
-    setAmount("");
-  };
-
-  const closeGuestDashboard = () => {
-    setSelectedGuestCategory(null);
-    resetGuestPayment();
-  };
 
   const resetAuthForm = () => {
     setAuthStep("phone");
@@ -363,11 +171,16 @@ const Index = () => {
   const handleCategoryClick = (category: typeof CATEGORIES[0]) => {
     if (category.requiresAuth) {
       setShowPicker(false);
-      setIsSignup(true); // Default to signup for new members
+      setIsSignup(true);
       setAuthDropdown("signup");
     } else {
       setShowPicker(false);
       setSelectedGuestCategory(category.id);
+      setPaymentDialog({
+        open: true,
+        isSimulated: false,
+        subtitle: category.id === "visitor" ? "Welcome Visitor!" : "Welcome Regular Attendee!",
+      });
     }
   };
 
@@ -488,7 +301,7 @@ const totalCollected = data?.total_collected ?? 0;
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
               onClick={() => setShowPicker(true)}
-              className="relative inline-flex items-center gap-4 px-10 py-5 rounded-2xl border border-transparent bg-gradient-to-r from-gold via-amber-500 to-gold bg-size-200 font-semibold text-lg text-white transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] transform hover:-translate-y-1 hover:bg-position-100 active:scale-[0.98] active:border-blue-950 active:border active:bg-gold-dark/95 focus:outline-none focus-visible:border-blue-900 focus-visible:ring-2 focus-visible:ring-blue-900/20 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
+              className="relative inline-flex items-center gap-2 sm:gap-4 px-5 py-2.5 sm:px-10 sm:py-5 rounded-xl sm:rounded-2xl border border-transparent bg-gradient-to-r from-gold via-amber-500 to-gold font-semibold text-sm sm:text-lg text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] focus:outline-none"
               style={{
                 backgroundSize: '200% 100%',
               }}
@@ -503,12 +316,12 @@ const totalCollected = data?.total_collected ?? 0;
       </div>
 
       {/* Expandable Cards Section */}
-      <section className="container mx-auto px-4 py-16 pr-12 lg:pr-20">
+      <section className="container mx-auto px-3 sm:px-4 py-10 sm:py-16 pr-14 sm:pr-16 lg:pr-24">
         <motion.div 
           initial={{ opacity: 0, y: 30 }} 
           whileInView={{ opacity: 1, y: 0 }} 
           viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
         >
           <ChuoKikuuFriendsCard 
             isExpanded={expandedCard === 0} 
@@ -526,7 +339,7 @@ const totalCollected = data?.total_collected ?? 0;
             isExpanded={expandedCard === 2} 
             onToggle={() => handleCardToggle(2)} 
             index={2}
-            onContributeClick={() => setShowPicker(true)} 
+            onContributeClick={() => setPaymentDialog({ open: true, isSimulated: false })} 
           />
           <CurrentProjectsCard 
             isExpanded={expandedCard === 3} 
@@ -769,367 +582,15 @@ const totalCollected = data?.total_collected ?? 0;
         )}
       </AnimatePresence>
 
-      {/* Guest Dashboard Dropdown - Inline Payment Form */}
-      <AnimatePresence>
-        {selectedGuestCategory && (
-          <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={closeGuestDashboard}
-          >
-            <motion.div
-              className="relative w-[90vw] sm:w-full max-w-md p-6 sm:p-8 rounded-3xl text-center overflow-hidden max-h-[90vh] overflow-y-auto"
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                backgroundImage: 'url(/sda_clean_super.png)',
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                backgroundRepeat: 'no-repeat',
-              }}
-            >
-              {/* Gradient Overlay */}
-              <div className="absolute inset-0 bg-gradient-to-br from-church-blue/90 via-church-blue/85 to-church-blue-dark/90" />
-              
-              {/* Content */}
-              <div className="relative z-10">
-                {/* Header with Close Button */}
-                <div className="flex items-center justify-between mb-4">
-                  <button 
-                    onClick={closeGuestDashboard}
-                    className="flex items-center gap-1 text-white/80 hover:text-white transition-colors text-sm"
-                  >
-                    <ArrowLeft className="w-4 h-4" />
-                    Back
-                  </button>
-                  <button 
-                    onClick={closeGuestDashboard}
-                    className="text-white/80 hover:text-white transition-colors p-1 rounded-full hover:bg-white/10"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                {/* Title */}
-                <motion.div
-                  className="w-14 h-14 rounded-2xl bg-white/95 flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden"
-                  animate={{ rotate: [0, 5, -5, 0] }}
-                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                >
-                  <img src="/sda_clean_super.png" alt="SDA Logo" className="w-9 h-9 object-contain" />
-                </motion.div>
-
-                <h1 className="text-2xl font-display text-white mb-1">
-                  Chuo Kikuu SDA Church
-                </h1>
-                <p className="text-xs font-semibold text-gold-light mb-4">
-                  {selectedGuestCategory === "visitor" ? "Welcome Visitor!" : "Welcome Regular Attendee!"}
-                </p>
-
-                {/* Payment Form or Status */}
-                <AnimatePresence mode="wait">
-                  {paymentState === "form" && (
-                    <motion.div
-                      key="form"
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: 20 }}
-                      className="space-y-4"
-                    >
-                      {/* Payment Processing Status */}
-                      {paymentStep === "sending" && (
-                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/10 text-center">
-                          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gold/20 flex items-center justify-center">
-                            <div className="w-6 h-6 border-2 border-gold border-t-transparent rounded-full animate-spin" />
-                          </div>
-                          <p className="text-white text-sm font-medium">Sending payment request...</p>
-                        </div>
-                      )}
-
-                      {paymentStep === "pending" && stkPushSent && (
-                        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-gold/30 text-center animate-pulse">
-                          <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                            <Phone className="w-6 h-6 text-emerald-400" />
-                          </div>
-                          <p className="text-white text-sm font-medium mb-1">STK Push Sent!</p>
-                          <p className="text-white/60 text-xs">Check your phone and enter PIN to confirm</p>
-                          <div className="mt-3 flex justify-center gap-1">
-                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '0ms' }} />
-                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '150ms' }} />
-                            <div className="w-2 h-2 rounded-full bg-gold animate-bounce" style={{ animationDelay: '300ms' }} />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Payment Type Tabs */}
-                      {(paymentStep === "idle" || paymentStep === "sending" || paymentStep === "pending") && (
-                        <div className="flex rounded-xl bg-white/10 p-1 border border-white/10">
-                          <button
-                            type="button"
-                            onClick={() => { setPaymentType("mobile_money"); setPaymentStep("idle"); }}
-                            disabled={isProcessing}
-                            className={cn(
-                              "flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
-                              paymentType === "mobile_money"
-                                ? "bg-white text-primary shadow-md"
-                                : "text-white/70 hover:text-white hover:bg-white/5"
-                            )}
-                          >
-                            Mobile Money
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setPaymentType("bank_transfer"); setPaymentStep("idle"); }}
-                            disabled={isProcessing}
-                            className={cn(
-                              "flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all duration-200",
-                              paymentType === "bank_transfer"
-                                ? "bg-white text-primary shadow-md"
-                                : "text-white/70 hover:text-white hover:bg-white/5"
-                            )}
-                          >
-                            Bank Transfer
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Mobile Money Fields */}
-                      {paymentType === "mobile_money" && (
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <label className="text-sm font-semibold text-white">Phone Number</label>
-                            <input
-                              type="tel"
-                              value={guestPhone}
-                              onChange={handlePhoneChange}
-                              placeholder="2557XXXXXXXX"
-                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
-                              maxLength={16}
-                              inputMode="numeric"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-semibold text-white">
-                              Reference Note <span className="text-white/40 font-normal">(Optional)</span>
-                            </label>
-                            <input
-                              type="text"
-                              value={reference}
-                              onChange={(e) => setReference(e.target.value)}
-                              placeholder="e.g., Tithe, Offering"
-                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
-                            />
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-semibold text-white">Mobile Money Provider</label>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { id: "mpesa", name: "M-Pesa" },
-                                { id: "tigopesa", name: "Tigo Pesa" },
-                                { id: "airtel", name: "Airtel Money" },
-                                { id: "halopesa", name: "HaloPesa" },
-                              ].map((method) => (
-                                <motion.button
-                                  key={method.id}
-                                  type="button"
-                                  onClick={() => setSelectedMobileMethod(method.id)}
-                                  whileHover={{ scale: 1.02 }}
-                                  whileTap={{ scale: 0.98 }}
-                                  className={cn(
-                                    "relative p-2 rounded-lg border-2 transition-all duration-200 text-center",
-                                    selectedMobileMethod === method.id
-                                      ? "border-gold bg-gold/10"
-                                      : "border-white/20 bg-white/5 hover:border-white/40"
-                                  )}
-                                >
-                                  <span className="font-medium text-white text-xs">{method.name}</span>
-                                  {selectedMobileMethod === method.id && (
-                                    <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-gold flex items-center justify-center">
-                                      <CheckCircle2 className="w-2 h-2 text-primary" />
-                                    </div>
-                                  )}
-                                </motion.button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Bank Transfer Fields */}
-                      {paymentType === "bank_transfer" && (
-                        <div className="space-y-3">
-                          <div className="space-y-1">
-                            <label className="text-sm font-semibold text-white">Select Bank</label>
-                            <div className="grid grid-cols-1 gap-2">
-                              {[
-                                { id: "crdb", name: "CRDB Bank", acc: "02XXXXXXXXXXXX" },
-                                { id: "nmb", name: "NMB Bank", acc: "XXXXXXXXXX" },
-                                { id: "nbc", name: "NBC Bank", acc: "XXXXXXXXXXXX" },
-                              ].map((bank) => (
-                                <motion.button
-                                  key={bank.id}
-                                  type="button"
-                                  onClick={() => setSelectedBank(bank.id)}
-                                  whileHover={{ scale: 1.01 }}
-                                  whileTap={{ scale: 0.99 }}
-                                  className={cn(
-                                    "relative p-3 rounded-lg border-2 transition-all duration-200 text-left",
-                                    selectedBank === bank.id
-                                      ? "border-gold bg-gold/10"
-                                      : "border-white/20 bg-white/5 hover:border-white/40"
-                                  )}
-                                >
-                                  <span className="font-semibold text-white text-sm block">{bank.name}</span>
-                                  <span className="text-xs text-white/50">Acc: {bank.acc}</span>
-                                  {selectedBank === bank.id && (
-                                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-gold flex items-center justify-center">
-                                      <CheckCircle2 className="w-2 h-2 text-primary" />
-                                    </div>
-                                  )}
-                                </motion.button>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-semibold text-white">Account Number</label>
-                            <input
-                              type="text"
-                              value={accountNumber}
-                              onChange={(e) => setAccountNumber(e.target.value)}
-                              placeholder="Enter your account number"
-                              className="w-full h-11 px-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Amount Input */}
-                      <div className="space-y-1">
-                        <label className="text-sm font-semibold text-white">Amount (TZS)</label>
-                        <div className="relative">
-                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-base text-muted-foreground font-medium">
-                            TZS
-                          </span>
-                          <input
-                            type="text"
-                            value={amount ? formatCurrency(parseInt(amount, 10) || 0) : ""}
-                            onChange={handleAmountChange}
-                            placeholder="0"
-                            className="w-full h-11 pl-16 pr-4 rounded-xl border-2 bg-white/95 text-base font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold"
-                            inputMode="numeric"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Submit Button */}
-                      <motion.button
-                        type="button"
-                        onClick={handleGuestPaymentSubmit}
-                        disabled={isProcessing}
-                        whileHover={!isProcessing ? { scale: 1.01 } : {}}
-                        whileTap={!isProcessing ? { scale: 0.99 } : {}}
-                        className={cn(
-                          "w-full h-11 rounded-xl font-semibold text-base transition-all duration-200 flex items-center justify-center gap-2",
-                          isProcessing
-                            ? "bg-white/20 text-white/50 cursor-not-allowed"
-                            : "gradient-gold text-primary-foreground shadow-lg shadow-gold/25"
-                        )}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          "Contribute Now"
-                        )}
-                      </motion.button>
-
-                      <p className="text-center text-xs text-white/40">@Chuo Kikuu SDA</p>
-                    </motion.div>
-                  )}
-
-                  {paymentState === "success" && paymentSummary && (
-                    <motion.div
-                      key="success"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="text-center py-4"
-                    >
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ type: "spring", stiffness: 200, damping: 15 }}
-                        className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/30"
-                      >
-                        <CheckCircle2 className="w-8 h-8 text-white" />
-                      </motion.div>
-                      <h2 className="text-xl font-display text-white mb-2">
-                        {paymentSummary.type === "mobile_money" ? "Contribution Initiated!" : "Bank Transfer Details!"}
-                      </h2>
-                      <p className="text-xs text-white/70 mb-4">
-                        {paymentSummary.type === "mobile_money" 
-                          ? "A payment request has been sent to your phone."
-                          : "Please use the bank details below to make your transfer."
-                        }
-                      </p>
-                      <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 mb-4 text-left border border-white/10">
-                        <div className="flex justify-between py-1.5 border-b border-white/10 text-xs">
-                          <span className="text-white/60">Amount</span>
-                          <span className="font-semibold text-gold-light">
-                            TZS {formatCurrency(paymentSummary.amount)}
-                          </span>
-                        </div>
-                      </div>
-                      <motion.button
-                        onClick={resetGuestPayment}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full py-2.5 px-4 rounded-xl gradient-gold text-white font-semibold transition-all shadow-lg text-sm"
-                      >
-                        Make Another Contribution
-                      </motion.button>
-                    </motion.div>
-                  )}
-
-                  {paymentState === "error" && (
-                    <motion.div
-                      key="error"
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="text-center py-4"
-                    >
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-400 to-red-600 flex items-center justify-center shadow-lg shadow-red-500/30">
-                        <X className="w-8 h-8 text-white" />
-                      </div>
-                      <h2 className="text-xl font-display text-white mb-2">Contribution Failed</h2>
-                      <p className="text-xs text-white/70 mb-4">{paymentError}</p>
-                      <motion.button
-                        onClick={() => setPaymentState("form")}
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        className="w-full py-2.5 px-4 rounded-xl gradient-gold text-white font-semibold transition-all shadow-lg text-sm"
-                      >
-                        Try Again
-                      </motion.button>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Unified Payment Dialog (replaces old guest payment dropdown) */}
+      <PaymentDialog
+        open={paymentDialog.open}
+        onClose={() => setPaymentDialog({ open: false, isSimulated: false })}
+        userId={null}
+        isSimulated={paymentDialog.isSimulated}
+        title="Make a Contribution"
+        subtitle={paymentDialog.subtitle ?? "Chuo Kikuu SDA Church"}
+      />
 
       {/* Footer */}
       <footer className="bg-church-blue border-t border-church-blue-dark py-8 pr-12 lg:pr-20">
