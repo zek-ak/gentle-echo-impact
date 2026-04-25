@@ -2,8 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 function normalizePhone(phone: string): string {
@@ -30,10 +29,10 @@ Deno.serve(async (req) => {
     const { phone, full_name } = await req.json();
 
     if (!phone) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Phone number is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Phone number is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const normalizedPhone = normalizePhone(phone);
@@ -53,7 +52,7 @@ Deno.serve(async (req) => {
     if ((count ?? 0) >= 5) {
       return new Response(
         JSON.stringify({ success: false, error: "Too many OTP requests. Try again in 5 minutes." }),
-        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -68,10 +67,10 @@ Deno.serve(async (req) => {
 
     if (insertError) {
       console.error("OTP insert error:", insertError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Failed to generate OTP" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Failed to generate OTP" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Send SMS via NextSMS
@@ -81,34 +80,31 @@ Deno.serve(async (req) => {
 
     const otpSenderId = "NEXTSMS";
 
-    const smsResponse = await fetch(
-      "https://messaging-service.co.tz/api/sms/v1/text/single",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Basic ${basicAuth}`,
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          // Kwa OTP tunatumia NEXTSMS moja kwa moja kwa sababu ndiyo
-          // sender inayoruhusiwa kufanya delivery across all Tanzania networks.
-          // Sender ID za biashara zinaweza kufanya kazi kwa mtandao mmoja tu
-          // kama hazijasajiliwa kwa Airtel/Tigo/Halotel/TTCL/Zantel.
-          from: otpSenderId,
-          to: normalizedPhone,
-          text: `Your OTP code is: ${otp}. Itaisha muda baada ya dakika 5.`,
-        }),
-      }
-    );
+    const smsResponse = await fetch("https://messaging-service.co.tz/api/sms/v1/text/single", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Basic ${basicAuth}`,
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        // Kwa OTP tunatumia NEXTSMS moja kwa moja kwa sababu ndiyo
+        // sender inayoruhusiwa kufanya delivery across all Tanzania networks.
+        // Sender ID za biashara zinaweza kufanya kazi kwa mtandao mmoja tu
+        // kama hazijasajiliwa kwa Airtel/Tigo/Halotel/TTCL/Zantel.
+        from: otpSenderId,
+        to: normalizedPhone,
+        text: `Your OTP code is: ${otp}. Itaisha muda baada ya dakika 5.`,
+      }),
+    });
 
     if (!smsResponse.ok) {
       const smsError = await smsResponse.text();
       console.error("NextSMS error:", smsResponse.status, smsError);
-      return new Response(
-        JSON.stringify({ success: false, error: "Failed to send SMS" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: false, error: "Failed to send SMS" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     await smsResponse.text(); // consume body
@@ -119,13 +115,13 @@ Deno.serve(async (req) => {
         message: "OTP sent successfully",
         phone: normalizedPhone,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
     console.error("send-otp error:", err);
-    return new Response(
-      JSON.stringify({ success: false, error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: false, error: "Internal server error" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
