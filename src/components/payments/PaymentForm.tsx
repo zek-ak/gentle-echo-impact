@@ -1,25 +1,20 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle2, X, Loader2, Phone } from "lucide-react";
+import { CheckCircle2, X, Loader2, Phone, Building2, ExternalLink } from "lucide-react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { getSession } from "@/lib/auth";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import confetti from "canvas-confetti";
 
-type PaymentType = "mobile_money" | "bank_transfer";
+type PaymentType = "mobile_money" | "bank";
+type PaymentState = "form" | "sending" | "pending" | "awaiting_bank" | "success" | "error";
 
 const mobileMoneyMethods = [
   { id: "mpesa", name: "M-Pesa" },
   { id: "tigopesa", name: "Tigo Pesa" },
   { id: "airtel", name: "Airtel Money" },
   { id: "halopesa", name: "HaloPesa" },
-];
-
-const bankMethods = [
-  { id: "crdb", name: "CRDB Bank", acc: "02XXXXXXXXXXXX" },
-  { id: "nmb", name: "NMB Bank", acc: "XXXXXXXXXX" },
-  { id: "nbc", name: "NBC Bank", acc: "XXXXXXXXXXXX" },
 ];
 
 const formatPhoneNumber = (value: string): string => {
@@ -32,6 +27,20 @@ const formatPhoneNumber = (value: string): string => {
 
 const formatCurrency = (amt: number): string => amt.toLocaleString("en-TZ");
 
+const openCenteredPopup = (url: string, name: string, w = 480, h = 720): Window | null => {
+  const dualLeft = window.screenLeft ?? window.screenX ?? 0;
+  const dualTop = window.screenTop ?? window.screenY ?? 0;
+  const width = window.innerWidth || document.documentElement.clientWidth || screen.width;
+  const height = window.innerHeight || document.documentElement.clientHeight || screen.height;
+  const left = dualLeft + (width - w) / 2;
+  const top = dualTop + (height - h) / 2;
+  return window.open(
+    url,
+    name,
+    `scrollbars=yes,resizable=yes,width=${w},height=${h},top=${top},left=${left}`,
+  );
+};
+
 interface PaymentFormProps {
   userId?: string | null;
   /** Demo mode: skip ClickPesa call (used by guest dashboard preview) */
@@ -43,13 +52,18 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
   const [phone, setPhone] = useState("");
   const [reference, setReference] = useState("");
   const [amount, setAmount] = useState("");
+  const [customerName, setCustomerName] = useState("");
   const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
-  const [selectedBank, setSelectedBank] = useState<string | null>(null);
-  const [accountNumber, setAccountNumber] = useState("");
 
-  const [paymentState, setPaymentState] = useState<"form" | "sending" | "pending" | "success" | "error">("form");
+  const [paymentState, setPaymentState] = useState<PaymentState>("form");
   const [errorMsg, setErrorMsg] = useState("");
   const [successSummary, setSuccessSummary] = useState<{ amount: number; type: PaymentType; method?: string | null } | null>(null);
+  const [activeOrderRef, setActiveOrderRef] = useState<string | null>(null);
+  const [paymentLink, setPaymentLink] = useState<string | null>(null);
+
+  const popupRef = useRef<Window | null>(null);
+  const pollingRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
 
   const handlePhoneChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setPhone(formatPhoneNumber(e.target.value));
@@ -59,56 +73,180 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     setAmount(e.target.value.replace(/[^0-9]/g, ""));
   }, []);
 
-  const pollStatus = async (orderReference: string, maxAttempts = 60): Promise<string> => {
-    const supabase = createSupabaseClient(getSession()?.access_token);
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, 5000));
-      try {
-        const { data, error } = await supabase.functions.invoke("clickpesa-status", {
-          body: { orderReference },
-        });
-        if (error) continue;
-        const s = (data as any)?.status;
-        if (s === "success") return "success";
-        if (s === "failed" || s === "reversed") return s;
-      } catch {
-        // continue polling
-      }
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current !== null) {
+      window.clearInterval(pollingRef.current);
+      pollingRef.current = null;
     }
-    return "timeout";
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true;
+      stopPolling();
+      try { popupRef.current?.close(); } catch { /* ignore */ }
+    };
+  }, [stopPolling]);
+
+  const fireConfetti = () => {
+    confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#d4a017", "#2d8a56", "#7c3aed"] });
+  };
+
+  const checkStatusOnce = async (orderReference: string): Promise<string | null> => {
+    const supabase = createSupabaseClient(getSession()?.access_token);
+    try {
+      const { data, error } = await supabase.functions.invoke("clickpesa-status", {
+        body: { orderReference },
+      });
+      if (error) return null;
+      return (data as { status?: string } | null)?.status ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  const startPolling = (orderReference: string, type: PaymentType, methodLabel: string | null, numericAmount: number) => {
+    stopPolling();
+    let attempts = 0;
+    const maxAttempts = 90; // ~6 mins at 4s
+    pollingRef.current = window.setInterval(async () => {
+      if (cancelledRef.current) return;
+      attempts += 1;
+      const status = await checkStatusOnce(orderReference);
+
+      if (status === "success") {
+        stopPolling();
+        try { popupRef.current?.close(); } catch { /* ignore */ }
+        setSuccessSummary({ amount: numericAmount, type, method: methodLabel });
+        setPaymentState("success");
+        fireConfetti();
+        toast.success("Contribution received!");
+        return;
+      }
+      if (status === "failed" || status === "reversed") {
+        stopPolling();
+        try { popupRef.current?.close(); } catch { /* ignore */ }
+        setPaymentState("error");
+        setErrorMsg(`Payment ${status}. Please try again.`);
+        return;
+      }
+      if (attempts >= maxAttempts) {
+        stopPolling();
+        setPaymentState("error");
+        setErrorMsg("We didn't receive a confirmation in time. Please check shortly.");
+      }
+    }, 4000);
   };
 
   const reset = () => {
+    cancelledRef.current = false;
+    stopPolling();
+    try { popupRef.current?.close(); } catch { /* ignore */ }
+    popupRef.current = null;
     setPaymentState("form");
     setPhone("");
     setReference("");
     setAmount("");
     setSelectedMobileMethod(null);
-    setSelectedBank(null);
-    setAccountNumber("");
     setErrorMsg("");
     setSuccessSummary(null);
+    setActiveOrderRef(null);
+    setPaymentLink(null);
+  };
+
+  const cancelActivePayment = () => {
+    stopPolling();
+    try { popupRef.current?.close(); } catch { /* ignore */ }
+    popupRef.current = null;
+    setPaymentState("form");
+    toast.info("Payment cancelled. Your transaction stays pending until confirmed.");
+  };
+
+  const checkNow = async () => {
+    if (!activeOrderRef) return;
+    toast.loading("Checking status...", { id: "check-status" });
+    const status = await checkStatusOnce(activeOrderRef);
+    toast.dismiss("check-status");
+    if (status === "success") {
+      stopPolling();
+      try { popupRef.current?.close(); } catch { /* ignore */ }
+      const numericAmount = parseInt(amount, 10);
+      setSuccessSummary({ amount: numericAmount, type: paymentType, method: selectedMobileMethod });
+      setPaymentState("success");
+      fireConfetti();
+    } else if (status === "failed" || status === "reversed") {
+      stopPolling();
+      setPaymentState("error");
+      setErrorMsg(`Payment ${status}.`);
+    } else {
+      toast.info("Still waiting for confirmation...");
+    }
   };
 
   const handleSubmit = async () => {
     const numericAmount = parseInt(amount, 10);
-    if (!numericAmount || numericAmount < 500 || numericAmount > 10_000_000) {
-      toast.error("Enter a valid amount (TZS 500 – 10,000,000)");
+    if (!numericAmount || numericAmount < 500 || numericAmount > 3_000_000) {
+      toast.error("Enter a valid amount (TZS 500 – 3,000,000)");
       return;
     }
 
-    // Bank transfer: just display info
-    if (paymentType === "bank_transfer") {
-      if (!selectedBank) {
-        toast.error("Please select a bank");
+    setErrorMsg("");
+
+    // ============ BANK FLOW ============
+    if (paymentType === "bank") {
+      setPaymentState("sending");
+
+      // Demo mode
+      if (isSimulated) {
+        await new Promise((r) => setTimeout(r, 1200));
+        setSuccessSummary({ amount: numericAmount, type: "bank", method: "Bank" });
+        setPaymentState("success");
+        fireConfetti();
+        toast.success("Bank payment recorded! (Demo)");
         return;
       }
-      setSuccessSummary({ amount: numericAmount, type: "bank_transfer", method: selectedBank });
-      setPaymentState("success");
+
+      try {
+        const supabase = createSupabaseClient(getSession()?.access_token);
+        const { data, error } = await supabase.functions.invoke("clickpesa-checkout", {
+          body: {
+            amount: numericAmount,
+            userId: userId ?? null,
+            reference: reference || null,
+            customerName: customerName || null,
+          },
+        });
+
+        if (error || !(data as { success?: boolean } | null)?.success) {
+          const msg = (data as { error?: string } | null)?.error || error?.message || "Failed to start payment";
+          setPaymentState("error");
+          setErrorMsg(msg);
+          toast.error(msg);
+          return;
+        }
+
+        const { orderReference, paymentLink: link } = data as { orderReference: string; paymentLink: string };
+        setActiveOrderRef(orderReference);
+        setPaymentLink(link);
+
+        // Open popup
+        const popup = openCenteredPopup(link, "clickpesa-checkout");
+        popupRef.current = popup;
+        if (!popup) {
+          toast.error("Popup blocked. Use the 'Open payment page' button below.");
+        }
+
+        setPaymentState("awaiting_bank");
+        startPolling(orderReference, "bank", "Bank", numericAmount);
+      } catch (err) {
+        setPaymentState("error");
+        setErrorMsg(err instanceof Error ? err.message : "Unexpected error");
+      }
       return;
     }
 
-    // Mobile money
+    // ============ MOBILE MONEY FLOW (USSD push) ============
     const cleanPhone = phone.replace(/\s/g, "");
     if (!cleanPhone || cleanPhone.length < 10) {
       toast.error("Enter a valid phone number");
@@ -120,14 +258,12 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     }
 
     setPaymentState("sending");
-    setErrorMsg("");
 
-    // Demo mode
     if (isSimulated) {
       await new Promise((r) => setTimeout(r, 1500));
       setSuccessSummary({ amount: numericAmount, type: "mobile_money", method: selectedMobileMethod });
       setPaymentState("success");
-      confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#d4a017", "#2d8a56", "#7c3aed"] });
+      fireConfetti();
       toast.success("Contribution recorded! (Demo)");
       return;
     }
@@ -143,36 +279,83 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         },
       });
 
-      if (error || !(data as any)?.success) {
-        const msg = (data as any)?.error || error?.message || "Failed to start payment";
+      if (error || !(data as { success?: boolean } | null)?.success) {
+        const msg = (data as { error?: string } | null)?.error || error?.message || "Failed to start payment";
         setPaymentState("error");
         setErrorMsg(msg);
         toast.error(msg);
         return;
       }
 
-      const orderReference = (data as any).orderReference;
+      const orderReference = (data as { orderReference: string }).orderReference;
+      setActiveOrderRef(orderReference);
       setPaymentState("pending");
       toast.success("Check your phone and enter PIN to confirm");
-
-      const finalStatus = await pollStatus(orderReference);
-      if (finalStatus === "success") {
-        setSuccessSummary({ amount: numericAmount, type: "mobile_money", method: selectedMobileMethod });
-        setPaymentState("success");
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 }, colors: ["#d4a017", "#2d8a56", "#7c3aed"] });
-        toast.success("Contribution received!");
-      } else if (finalStatus === "timeout") {
-        setPaymentState("error");
-        setErrorMsg("We didn't receive a confirmation in time. Please check shortly.");
-      } else {
-        setPaymentState("error");
-        setErrorMsg(`Payment ${finalStatus}. Please try again.`);
-      }
-    } catch (err: any) {
+      startPolling(orderReference, "mobile_money", selectedMobileMethod, numericAmount);
+    } catch (err) {
       setPaymentState("error");
-      setErrorMsg(err?.message || "Unexpected error");
+      setErrorMsg(err instanceof Error ? err.message : "Unexpected error");
     }
   };
+
+  // ============ AWAITING BANK STATE (popup open) ============
+  if (paymentState === "awaiting_bank") {
+    return (
+      <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-3">
+        <div className="relative w-20 h-20 mx-auto mb-4">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400/30 to-purple-500/30 animate-ping" />
+          <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-xl">
+            <Building2 className="w-9 h-9 text-white" />
+          </div>
+        </div>
+        <h2 className="text-lg font-display text-white mb-1">Waiting for bank confirmation...</h2>
+        <p className="text-xs text-white/70 mb-4 px-2">
+          Complete the payment in the popup window. We'll detect it automatically.
+        </p>
+
+        <div className="bg-white/10 rounded-xl p-3 mb-4 border border-white/10">
+          <div className="flex justify-between text-xs mb-1">
+            <span className="text-white/60">Amount</span>
+            <span className="font-semibold text-gold-light">TZS {formatCurrency(parseInt(amount, 10) || 0)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-white/60">Reference</span>
+            <span className="font-mono text-white/80 text-[10px]">{activeOrderRef}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Loader2 className="w-4 h-4 text-gold animate-spin" />
+          <span className="text-xs text-white/70">Polling status every 4s</span>
+        </div>
+
+        <div className="space-y-2">
+          {paymentLink && (
+            <a
+              href={paymentLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full h-10 rounded-xl border border-white/20 text-white text-xs font-medium flex items-center justify-center gap-2 hover:bg-white/10 transition"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Open payment page
+            </a>
+          )}
+          <button
+            onClick={checkNow}
+            className="w-full h-10 rounded-xl gradient-gold text-primary-foreground text-xs font-semibold"
+          >
+            I have completed payment
+          </button>
+          <button
+            onClick={cancelActivePayment}
+            className="w-full h-9 rounded-xl text-white/70 text-xs hover:text-white"
+          >
+            Cancel payment
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
 
   // SUCCESS
   if (paymentState === "success" && successSummary) {
@@ -181,21 +364,19 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-lg">
           <CheckCircle2 className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-xl font-display text-white mb-2">
-          {successSummary.type === "mobile_money" ? "Contribution Initiated!" : "Bank Transfer Details"}
-        </h2>
-        <p className="text-xs text-white/70 mb-4">
-          {successSummary.type === "mobile_money"
-            ? "Confirm on your phone to complete the payment."
-            : "Use the bank details to complete your transfer."}
-        </p>
+        <h2 className="text-xl font-display text-white mb-2">Contribution Received!</h2>
+        <p className="text-xs text-white/70 mb-4">Asante kwa mchango wako. Mungu akubariki!</p>
         <div className="bg-white/10 rounded-xl p-3 mb-4 text-left border border-white/10">
           <div className="flex justify-between py-1.5 text-xs">
             <span className="text-white/60">Amount</span>
             <span className="font-semibold text-gold-light">TZS {formatCurrency(successSummary.amount)}</span>
           </div>
+          <div className="flex justify-between py-1.5 text-xs">
+            <span className="text-white/60">Method</span>
+            <span className="font-semibold text-white">{successSummary.type === "bank" ? "Bank" : "Mobile Money"}</span>
+          </div>
         </div>
-        <button onClick={reset} className="w-full py-2.5 rounded-xl gradient-gold text-white font-semibold text-sm shadow-lg">
+        <button onClick={reset} className="w-full py-2.5 rounded-xl gradient-gold text-primary-foreground font-semibold text-sm shadow-lg">
           Make Another Contribution
         </button>
       </motion.div>
@@ -211,27 +392,30 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         </div>
         <h2 className="text-xl font-display text-white mb-2">Payment Failed</h2>
         <p className="text-xs text-white/70 mb-4 break-words">{errorMsg}</p>
-        <button onClick={() => setPaymentState("form")} className="w-full py-2.5 rounded-xl gradient-gold text-white font-semibold text-sm shadow-lg">
+        <button onClick={reset} className="w-full py-2.5 rounded-xl gradient-gold text-primary-foreground font-semibold text-sm shadow-lg">
           Try Again
         </button>
       </div>
     );
   }
 
-  // PROCESSING STATES (still show form below but with banner)
+  // FORM + processing banners
   return (
     <div className="space-y-3">
       {paymentState === "sending" && (
         <div className="bg-white/10 rounded-xl p-3 border border-white/10 text-center">
           <Loader2 className="w-6 h-6 mx-auto mb-2 text-gold animate-spin" />
-          <p className="text-white text-sm">Sending payment request...</p>
+          <p className="text-white text-sm">Preparing payment...</p>
         </div>
       )}
       {paymentState === "pending" && (
         <div className="bg-white/10 rounded-xl p-3 border border-gold/30 text-center">
           <Phone className="w-6 h-6 mx-auto mb-2 text-emerald-400" />
           <p className="text-white text-sm font-medium">Check your phone</p>
-          <p className="text-white/60 text-xs">Enter PIN to confirm</p>
+          <p className="text-white/60 text-xs">Enter PIN to confirm. We'll auto-detect it.</p>
+          <button onClick={cancelActivePayment} className="mt-2 text-xs text-white/60 hover:text-white underline">
+            Cancel
+          </button>
         </div>
       )}
 
@@ -250,14 +434,14 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         </button>
         <button
           type="button"
-          onClick={() => setPaymentType("bank_transfer")}
+          onClick={() => setPaymentType("bank")}
           disabled={paymentState !== "form"}
           className={cn(
             "flex-1 py-2 px-3 rounded-lg text-xs sm:text-sm font-medium transition-all",
-            paymentType === "bank_transfer" ? "bg-white text-primary shadow-md" : "text-white/70 hover:text-white"
+            paymentType === "bank" ? "bg-white text-primary shadow-md" : "text-white/70 hover:text-white"
           )}
         >
-          Bank Transfer
+          Bank / Card
         </button>
       </div>
 
@@ -334,38 +518,39 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
             exit={{ opacity: 0, x: -10 }}
             className="space-y-3"
           >
-            <div>
-              <label className="text-xs sm:text-sm font-semibold text-white">Select Bank</label>
-              <div className="grid grid-cols-1 gap-2 mt-1">
-                {bankMethods.map((b) => (
-                  <button
-                    key={b.id}
-                    type="button"
-                    onClick={() => setSelectedBank(b.id)}
-                    disabled={paymentState !== "form"}
-                    className={cn(
-                      "relative p-3 rounded-lg border-2 transition-all text-left",
-                      selectedBank === b.id
-                        ? "border-gold bg-gold/10"
-                        : "border-white/20 bg-white/5 hover:border-white/40"
-                    )}
-                  >
-                    <span className="font-semibold text-white text-sm block">{b.name}</span>
-                    <span className="text-xs text-white/50">Acc: {b.acc}</span>
-                  </button>
-                ))}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-3 flex items-start gap-2">
+              <Building2 className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-white/70 leading-relaxed">
+                A secure popup will open where you can pay using <strong className="text-white">CRDB, NMB, NBC, Equity, cards</strong> and more. Your bank credentials are never seen by us.
               </div>
             </div>
 
             <div>
-              <label className="text-xs sm:text-sm font-semibold text-white">Account Number</label>
+              <label className="text-xs sm:text-sm font-semibold text-white">
+                Your Name <span className="text-white/40 font-normal">(Optional)</span>
+              </label>
               <input
                 type="text"
-                value={accountNumber}
-                onChange={(e) => setAccountNumber(e.target.value)}
-                placeholder="Your account number"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="Full name"
                 disabled={paymentState !== "form"}
-                maxLength={50}
+                maxLength={80}
+                className="w-full h-10 sm:h-11 mt-1 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs sm:text-sm font-semibold text-white">
+                Reference <span className="text-white/40 font-normal">(Optional)</span>
+              </label>
+              <input
+                type="text"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="e.g., Tithe, Offering"
+                disabled={paymentState !== "form"}
+                maxLength={100}
                 className="w-full h-10 sm:h-11 mt-1 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
               />
             </div>
@@ -388,7 +573,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
             inputMode="numeric"
           />
         </div>
-        <p className="text-xs text-white/50 mt-1">Min TZS 500</p>
+        <p className="text-xs text-white/50 mt-1">Min TZS 500 — Max 3,000,000</p>
       </div>
 
       <button
@@ -402,11 +587,13 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
             : "gradient-gold text-primary-foreground shadow-lg"
         )}
       >
-        {paymentState === "sending" || paymentState === "pending" ? (
+        {paymentState === "sending" ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
             Processing...
           </>
+        ) : paymentType === "bank" ? (
+          "Pay Now"
         ) : (
           "Contribute Now"
         )}

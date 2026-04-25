@@ -90,6 +90,8 @@ export type Database = {
           currency: string | null
           id: string
           method: string | null
+          payment_link: string | null
+          payment_method_used: string | null
           payment_provider: string | null
           project_id: string | null
           reference: string | null
@@ -104,6 +106,8 @@ export type Database = {
           currency?: string | null
           id?: string
           method?: string | null
+          payment_link?: string | null
+          payment_method_used?: string | null
           payment_provider?: string | null
           project_id?: string | null
           reference?: string | null
@@ -118,6 +122,8 @@ export type Database = {
           currency?: string | null
           id?: string
           method?: string | null
+          payment_link?: string | null
+          payment_method_used?: string | null
           payment_provider?: string | null
           project_id?: string | null
           reference?: string | null
