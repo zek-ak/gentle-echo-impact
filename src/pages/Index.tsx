@@ -316,12 +316,12 @@ const totalCollected = data?.total_collected ?? 0;
       </div>
 
       {/* Expandable Cards Section */}
-      <section className="container mx-auto px-3 sm:px-4 py-10 sm:py-16 pr-14 sm:pr-16 lg:pr-24">
-        <motion.div 
-          initial={{ opacity: 0, y: 30 }} 
-          whileInView={{ opacity: 1, y: 0 }} 
+      <section className="w-full px-3 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-10 sm:py-16">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6"
+          className="mx-auto grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 md:max-w-[95%] lg:max-w-[92%] xl:max-w-[1280px]"
         >
           <ChuoKikuuFriendsCard 
             isExpanded={expandedCard === 0} 
