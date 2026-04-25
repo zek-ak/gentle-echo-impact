@@ -121,7 +121,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
         setSuccessSummary({ amount: numericAmount, type, method: methodLabel });
         setPaymentState("success");
         fireConfetti();
-        toast.success("Contribution received!");
+        
         return;
       }
       if (status === "failed" || status === "reversed") {
