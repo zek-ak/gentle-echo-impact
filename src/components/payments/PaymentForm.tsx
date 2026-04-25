@@ -160,14 +160,11 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     try { popupRef.current?.close(); } catch { /* ignore */ }
     popupRef.current = null;
     setPaymentState("form");
-    toast.info("Payment cancelled. Your transaction stays pending until confirmed.");
   };
 
   const checkNow = async () => {
     if (!activeOrderRef) return;
-    toast.loading("Checking status...", { id: "check-status" });
     const status = await checkStatusOnce(activeOrderRef);
-    toast.dismiss("check-status");
     if (status === "success") {
       stopPolling();
       try { popupRef.current?.close(); } catch { /* ignore */ }
@@ -179,8 +176,6 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
       stopPolling();
       setPaymentState("error");
       setErrorMsg(`Payment ${status}.`);
-    } else {
-      toast.info("Still waiting for confirmation...");
     }
   };
 
