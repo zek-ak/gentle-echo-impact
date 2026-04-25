@@ -78,7 +78,10 @@ Deno.serve(async (req) => {
     const nextsmsPassword = Deno.env.get("NEXTSMS_PASSWORD")!;
     const basicAuth = btoa(`${nextsmsUsername}:${nextsmsPassword}`);
 
-    const otpSenderId = "NEXTSMS";
+    // Sender ID lazima iwe imesajiliwa kwa networks zote (Airtel, Tigo, Halotel, TTCL, Zantel, Vodacom).
+    // "OTP" ni default sender ID inayotolewa na NextSMS kwa OTP traffic ambayo inaruhusiwa kwa networks zote.
+    // Kama haitakuwa imesajiliwa kwa account hii, tutapata error code kwenye response na ku-fallback "NEXTSMS".
+    const otpSenderId = Deno.env.get("NEXTSMS_SENDER_ID") || "OTP";
 
     const smsResponse = await fetch("https://messaging-service.co.tz/api/sms/v1/text/single", {
       method: "POST",
@@ -88,26 +91,48 @@ Deno.serve(async (req) => {
         Accept: "application/json",
       },
       body: JSON.stringify({
-        // Kwa OTP tunatumia NEXTSMS moja kwa moja kwa sababu ndiyo
-        // sender inayoruhusiwa kufanya delivery across all Tanzania networks.
-        // Sender ID za biashara zinaweza kufanya kazi kwa mtandao mmoja tu
-        // kama hazijasajiliwa kwa Airtel/Tigo/Halotel/TTCL/Zantel.
         from: otpSenderId,
         to: normalizedPhone,
         text: `Your OTP code is: ${otp}. Itaisha muda baada ya dakika 5.`,
       }),
     });
 
+    const smsBodyText = await smsResponse.text();
+    console.log("NextSMS response status:", smsResponse.status);
+    console.log("NextSMS response body:", smsBodyText);
+
     if (!smsResponse.ok) {
-      const smsError = await smsResponse.text();
-      console.error("NextSMS error:", smsResponse.status, smsError);
+      console.error("NextSMS HTTP error:", smsResponse.status, smsBodyText);
       return new Response(JSON.stringify({ success: false, error: "Failed to send SMS" }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    await smsResponse.text(); // consume body
+    // NextSMS inarudisha HTTP 200 hata kwa errors. Tunahitaji ku-parse JSON na kuangalia
+    // status code ndani ya response ili kuthibitisha message imekubaliwa.
+    try {
+      const smsJson = JSON.parse(smsBodyText);
+      const messages = smsJson?.messages ?? [];
+      const firstMessage = messages[0];
+      const statusGroup = firstMessage?.status?.groupName ?? firstMessage?.status?.name;
+      // groupName: "PENDING" au "ACCEPTED" = nzuri. "REJECTED" / "UNDELIVERABLE" = mbaya.
+      if (
+        statusGroup &&
+        !["PENDING", "ACCEPTED", "DELIVERED"].includes(String(statusGroup).toUpperCase())
+      ) {
+        console.error("NextSMS rejected message:", firstMessage?.status);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `SMS delivery failed: ${firstMessage?.status?.description ?? "rejected"}`,
+          }),
+          { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+    } catch (parseErr) {
+      console.warn("Could not parse NextSMS response as JSON:", parseErr);
+    }
 
     return new Response(
       JSON.stringify({
