@@ -1,4 +1,4 @@
-import { KeyboardEvent } from "react";
+import { KeyboardEvent, useEffect, useRef, useState, Children, isValidElement, cloneElement, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
 
@@ -14,8 +14,65 @@ interface ExpandableCardProps {
 
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
+// Typewriter effect for text. Renders text progressively when `play` is true.
+const Typewriter = ({ text, play, speed = 18, className }: { text: string; play: boolean; speed?: number; className?: string }) => {
+  const [shown, setShown] = useState(play ? 0 : text.length);
+
+  useEffect(() => {
+    if (!play) {
+      setShown(text.length);
+      return;
+    }
+    setShown(0);
+    let i = 0;
+    const id = window.setInterval(() => {
+      i += 1;
+      setShown(i);
+      if (i >= text.length) window.clearInterval(id);
+    }, speed);
+    return () => window.clearInterval(id);
+  }, [text, play, speed]);
+
+  return (
+    <span className={className}>
+      {text.slice(0, shown)}
+      {play && shown < text.length && (
+        <span className="inline-block w-[2px] h-[1em] align-[-0.15em] ml-[1px] bg-white/80 animate-pulse" />
+      )}
+    </span>
+  );
+};
+
+// Recursively walk children and replace string nodes with <Typewriter>.
+// Buttons and links are left intact (they render their label instantly).
+const typewriteChildren = (node: ReactNode, play: boolean, counter: { i: number }): ReactNode => {
+  if (typeof node === "string" || typeof node === "number") {
+    const text = String(node);
+    if (!text.trim()) return node;
+    counter.i += 1;
+    return <Typewriter key={`tw-${counter.i}`} text={text} play={play} />;
+  }
+  if (Array.isArray(node)) {
+    return node.map((child, idx) => (
+      <span key={idx} style={{ display: "contents" }}>{typewriteChildren(child, play, counter)}</span>
+    ));
+  }
+  if (isValidElement(node)) {
+    const type = node.type as any;
+    // Skip interactive elements – keep their label as-is
+    if (type === "a" || type === "button") return node;
+    const childChildren = (node.props as any).children;
+    if (childChildren === undefined) return node;
+    return cloneElement(node, node.props as any, typewriteChildren(childChildren, play, counter));
+  }
+  return node;
+};
+
 const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: ExpandableCardProps) => {
   const contentId = `expandable-card-content-${index}`;
+  const counterRef = useRef({ i: 0 });
+  counterRef.current = { i: 0 };
+  const animatedChildren = typewriteChildren(children, isExpanded, counterRef.current);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
@@ -72,12 +129,14 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
           layout
           className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-6 pr-12 sm:pr-16"
         >
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <div className="flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl sm:rounded-2xl bg-white/10 text-white shadow-inner flex-shrink-0">
               {icon}
             </div>
-            <div className="min-w-0">
-              <h3 className="text-white font-display text-sm sm:text-lg font-semibold tracking-tight truncate">{title}</h3>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-white font-display text-sm sm:text-lg font-semibold tracking-tight leading-snug break-words [overflow-wrap:anywhere] whitespace-normal">
+                {title}
+              </h3>
             </div>
           </div>
           <motion.div
@@ -126,7 +185,7 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
                 transition={{ duration: 0.28, ease, delay: isExpanded ? 0.05 : 0 }}
                 className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
               >
-                {children}
+                {animatedChildren}
               </motion.div>
             )}
           </AnimatePresence>
