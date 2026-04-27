@@ -13,7 +13,6 @@ import { ChuoKikuuFriendsCard, ImpactCard, CallToActionCard, CurrentProjectsCard
 import PaymentDialog from "@/components/payments/PaymentDialog";
 import { usePublicDashboard } from "@/hooks/useChurchData";
 import { sendOtp, verifyOtp, signIn, getSession } from "@/lib/auth";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const ANNUAL_GOAL = 500000; // Configurable church annual goal
