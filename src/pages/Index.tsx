@@ -316,7 +316,7 @@ const totalCollected = data?.total_collected ?? 0;
       </div>
 
       {/* Expandable Cards Section */}
-      <section className="w-full px-3 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-10 sm:py-16">
+      <section className="w-full pl-3 pr-14 sm:pl-6 sm:pr-16 md:pl-8 md:pr-20 lg:pl-10 lg:pr-24 xl:pl-12 xl:pr-28 py-10 sm:py-16">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
