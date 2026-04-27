@@ -13,7 +13,6 @@ import { ChuoKikuuFriendsCard, ImpactCard, CallToActionCard, CurrentProjectsCard
 import PaymentDialog from "@/components/payments/PaymentDialog";
 import { usePublicDashboard } from "@/hooks/useChurchData";
 import { sendOtp, verifyOtp, signIn, getSession } from "@/lib/auth";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const ANNUAL_GOAL = 500000; // Configurable church annual goal
@@ -60,6 +59,7 @@ const Index = () => {
 
   // Auth form state - simplified to match Auth.tsx
   const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isSignup, setIsSignup] = useState(true);
   const [authStep, setAuthStep] = useState<"phone" | "otp" | "password">("phone");
   const [fullName, setFullName] = useState("");
@@ -80,13 +80,14 @@ const Index = () => {
   // Auth handlers using Supabase
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     if (phone.length < 10) {
-      toast.error("Enter valid phone (10+ digits)");
+      setAuthError("Enter valid phone (10+ digits)");
       return;
     }
     
     if (isSignup && !fullName.trim()) {
-      toast.error("Enter your full name for signup");
+      setAuthError("Enter your full name for signup");
       return;
     }
 
@@ -95,18 +96,16 @@ const Index = () => {
       if (isSignup) {
         // Sign Up: Send OTP
         await sendOtp(phone, fullName.trim());
-        toast.success("OTP sent to " + phone);
         setAuthStep("otp");
         setOtpCountdown(300);
         startCountdown();
       } else {
         // Sign In: Direct login with phone only, NO OTP
         const session = await signIn(phone);
-        toast.success("Logged in!");
         navigate("/dashboard", { replace: true });
       }
     } catch (err: any) {
-      toast.error(err.message || isSignup ? "Failed to send OTP" : "Failed to sign in");
+      setAuthError(err?.message || (isSignup ? "Failed to send OTP" : "Failed to sign in"));
     } finally {
       setAuthLoading(false);
     }
@@ -114,17 +113,17 @@ const Index = () => {
 
   const verifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     if (otp.length !== 6) {
-      toast.error("Enter 6-digit OTP");
+      setAuthError("Enter 6-digit OTP");
       return;
     }
     setAuthLoading(true);
     try {
       const session = await verifyOtp(phone, otp, fullName);
-      toast.success("Logged in!");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
-      toast.error(err.message || "Invalid OTP");
+      setAuthError(err?.message || "Invalid OTP");
     } finally {
       setAuthLoading(false);
     }
@@ -165,6 +164,7 @@ const Index = () => {
     setPhone("");
     setOtp("");
     setOtpCountdown(0);
+    setAuthError(null);
     setAuthDropdown(null);
   };
 
@@ -480,6 +480,12 @@ const totalCollected = data?.total_collected ?? 0;
                   </div>
                 )}
               </div>
+
+              {authError && (
+                <div className="mb-4 rounded-xl bg-red-500/20 border border-red-300/40 px-4 py-2.5 text-sm text-white text-center backdrop-blur-sm">
+                  {authError}
+                </div>
+              )}
 
               {authStep === "phone" ? (
                 <form onSubmit={handlePhoneSubmit} className="space-y-4">
