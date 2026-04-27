@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useToast } from "@/hooks/use-toast";
 import { signIn, sendOtp, verifyOtp, normalizePhone } from "@/lib/auth";
 import { Phone, Shield, User, Loader2 } from "lucide-react";
 
@@ -17,34 +16,35 @@ const Auth = () => {
   const [fullName, setFullName] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSignIn = async () => {
+    setErrorMsg(null);
     if (!phone.trim()) {
-      toast({ title: "Kosa", description: "Tafadhali ingiza namba ya simu", variant: "destructive" });
+      setErrorMsg("Tafadhali ingiza namba ya simu");
       return;
     }
 
     setLoading(true);
     try {
       await signIn(phone);
-      toast({ title: "Umefanikiwa!", description: "Umeingia kikamilifu" });
       navigate("/");
     } catch (err: any) {
-      toast({ title: "Kosa", description: err?.message || "Imeshindwa kuingia", variant: "destructive" });
+      setErrorMsg(err?.message || "Imeshindwa kuingia");
     } finally {
       setLoading(false);
     }
   };
 
   const handleSendOtp = async () => {
+    setErrorMsg(null);
     if (!phone.trim()) {
-      toast({ title: "Kosa", description: "Tafadhali ingiza namba ya simu", variant: "destructive" });
+      setErrorMsg("Tafadhali ingiza namba ya simu");
       return;
     }
     if (!fullName.trim()) {
-      toast({ title: "Kosa", description: "Tafadhali ingiza jina lako kamili", variant: "destructive" });
+      setErrorMsg("Tafadhali ingiza jina lako kamili");
       return;
     }
 
@@ -52,27 +52,26 @@ const Auth = () => {
     try {
       await sendOtp(phone, fullName);
       setSignupStep("otp");
-      toast({ title: "OTP Imetumwa", description: `OTP imetumwa kwa ${normalizePhone(phone)}` });
     } catch (err: any) {
-      toast({ title: "Kosa", description: err?.message || "Imeshindwa kutuma OTP", variant: "destructive" });
+      setErrorMsg(err?.message || "Imeshindwa kutuma OTP");
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyOtp = async () => {
+    setErrorMsg(null);
     if (!otp.trim() || otp.length !== 6) {
-      toast({ title: "Kosa", description: "Tafadhali ingiza OTP yenye tarakimu 6", variant: "destructive" });
+      setErrorMsg("Tafadhali ingiza OTP yenye tarakimu 6");
       return;
     }
 
     setLoading(true);
     try {
       await verifyOtp(phone, otp, fullName);
-      toast({ title: "Umefanikiwa!", description: "Umesajiliwa kikamilifu" });
       navigate("/");
     } catch (err: any) {
-      toast({ title: "Kosa", description: err?.message || "OTP si sahihi au imekwisha muda", variant: "destructive" });
+      setErrorMsg(err?.message || "OTP si sahihi au imekwisha muda");
     } finally {
       setLoading(false);
     }
@@ -81,6 +80,7 @@ const Auth = () => {
   const resetSignup = () => {
     setSignupStep("phone");
     setOtp("");
+    setErrorMsg(null);
   };
 
   return (
@@ -113,6 +113,12 @@ const Auth = () => {
               <TabsTrigger value="signin">Ingia</TabsTrigger>
               <TabsTrigger value="signup">Jisajili</TabsTrigger>
             </TabsList>
+
+            {errorMsg && (
+              <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive text-center">
+                {errorMsg}
+              </div>
+            )}
 
             {/* SIGN IN - Phone only */}
             <TabsContent value="signin" className="space-y-4">
