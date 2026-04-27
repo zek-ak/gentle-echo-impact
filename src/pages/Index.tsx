@@ -481,6 +481,12 @@ const totalCollected = data?.total_collected ?? 0;
                 )}
               </div>
 
+              {authError && (
+                <div className="mb-4 rounded-xl bg-red-500/20 border border-red-300/40 px-4 py-2.5 text-sm text-white text-center backdrop-blur-sm">
+                  {authError}
+                </div>
+              )}
+
               {authStep === "phone" ? (
                 <form onSubmit={handlePhoneSubmit} className="space-y-4">
                   {isSignup && (
