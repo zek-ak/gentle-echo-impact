@@ -59,6 +59,7 @@ const Index = () => {
 
   // Auth form state - simplified to match Auth.tsx
   const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [isSignup, setIsSignup] = useState(true);
   const [authStep, setAuthStep] = useState<"phone" | "otp" | "password">("phone");
   const [fullName, setFullName] = useState("");
