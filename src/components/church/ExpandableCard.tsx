@@ -15,7 +15,20 @@ interface ExpandableCardProps {
 const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 
 // Typewriter effect for text. Renders text progressively when `play` is true.
-const Typewriter = ({ text, play, speed = 18, className }: { text: string; play: boolean; speed?: number; className?: string }) => {
+// `startDelay` (ms) lets multiple typewriters run sequentially instead of all at once.
+const Typewriter = ({
+  text,
+  play,
+  speed = 18,
+  startDelay = 0,
+  className,
+}: {
+  text: string;
+  play: boolean;
+  speed?: number;
+  startDelay?: number;
+  className?: string;
+}) => {
   const [shown, setShown] = useState(play ? 0 : text.length);
 
   useEffect(() => {
@@ -24,19 +37,29 @@ const Typewriter = ({ text, play, speed = 18, className }: { text: string; play:
       return;
     }
     setShown(0);
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(i);
-      if (i >= text.length) window.clearInterval(id);
-    }, speed);
-    return () => window.clearInterval(id);
-  }, [text, play, speed]);
+    let intervalId: number | undefined;
+    const timeoutId = window.setTimeout(() => {
+      let i = 0;
+      intervalId = window.setInterval(() => {
+        i += 1;
+        setShown(i);
+        if (i >= text.length && intervalId !== undefined) {
+          window.clearInterval(intervalId);
+        }
+      }, speed);
+    }, startDelay);
+    return () => {
+      window.clearTimeout(timeoutId);
+      if (intervalId !== undefined) window.clearInterval(intervalId);
+    };
+  }, [text, play, speed, startDelay]);
+
+  const isTyping = play && shown < text.length;
 
   return (
     <span className={className}>
       {text.slice(0, shown)}
-      {play && shown < text.length && (
+      {isTyping && (
         <span className="inline-block w-[2px] h-[1em] align-[-0.15em] ml-[1px] bg-white/80 animate-pulse" />
       )}
     </span>
@@ -44,17 +67,37 @@ const Typewriter = ({ text, play, speed = 18, className }: { text: string; play:
 };
 
 // Recursively walk children and replace string nodes with <Typewriter>.
-// Buttons and links are left intact (they render their label instantly).
-const typewriteChildren = (node: ReactNode, play: boolean, counter: { i: number }): ReactNode => {
+// Each text node gets a startDelay so they animate one after another.
+// `state.delay` accumulates ms across the whole subtree.
+const SPEED = 18;
+const PAUSE_BETWEEN = 120; // small gap between sequential text nodes
+
+const typewriteChildren = (
+  node: ReactNode,
+  play: boolean,
+  state: { i: number; delay: number },
+): ReactNode => {
   if (typeof node === "string" || typeof node === "number") {
     const text = String(node);
     if (!text.trim()) return node;
-    counter.i += 1;
-    return <Typewriter key={`tw-${counter.i}`} text={text} play={play} />;
+    state.i += 1;
+    const myDelay = state.delay;
+    state.delay += text.length * SPEED + PAUSE_BETWEEN;
+    return (
+      <Typewriter
+        key={`tw-${state.i}`}
+        text={text}
+        play={play}
+        speed={SPEED}
+        startDelay={myDelay}
+      />
+    );
   }
   if (Array.isArray(node)) {
     return node.map((child, idx) => (
-      <span key={idx} style={{ display: "contents" }}>{typewriteChildren(child, play, counter)}</span>
+      <span key={idx} style={{ display: "contents" }}>
+        {typewriteChildren(child, play, state)}
+      </span>
     ));
   }
   if (isValidElement(node)) {
@@ -63,16 +106,16 @@ const typewriteChildren = (node: ReactNode, play: boolean, counter: { i: number 
     if (type === "a" || type === "button") return node;
     const childChildren = (node.props as any).children;
     if (childChildren === undefined) return node;
-    return cloneElement(node, node.props as any, typewriteChildren(childChildren, play, counter));
+    return cloneElement(node, node.props as any, typewriteChildren(childChildren, play, state));
   }
   return node;
 };
 
 const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: ExpandableCardProps) => {
   const contentId = `expandable-card-content-${index}`;
-  const counterRef = useRef({ i: 0 });
-  counterRef.current = { i: 0 };
-  const animatedChildren = typewriteChildren(children, isExpanded, counterRef.current);
+  const stateRef = useRef({ i: 0, delay: 0 });
+  stateRef.current = { i: 0, delay: 0 };
+  const animatedChildren = typewriteChildren(children, isExpanded, stateRef.current);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
