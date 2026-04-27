@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useRef, useState, Children, isValidElement, cloneElement, ReactNode } from "react";
+import { Fragment, KeyboardEvent, useEffect, useRef, useState, Children, isValidElement, cloneElement, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, X } from "lucide-react";
 
@@ -95,9 +95,7 @@ const typewriteChildren = (
   }
   if (Array.isArray(node)) {
     return node.map((child, idx) => (
-      <span key={idx} style={{ display: "contents" }}>
-        {typewriteChildren(child, play, state)}
-      </span>
+      <Fragment key={idx}>{typewriteChildren(child, play, state)}</Fragment>
     ));
   }
   if (isValidElement(node)) {
