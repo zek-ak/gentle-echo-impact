@@ -164,6 +164,7 @@ const Index = () => {
     setPhone("");
     setOtp("");
     setOtpCountdown(0);
+    setAuthError(null);
     setAuthDropdown(null);
   };
 
