@@ -80,13 +80,14 @@ const Index = () => {
   // Auth handlers using Supabase
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     if (phone.length < 10) {
-      toast.error("Enter valid phone (10+ digits)");
+      setAuthError("Enter valid phone (10+ digits)");
       return;
     }
     
     if (isSignup && !fullName.trim()) {
-      toast.error("Enter your full name for signup");
+      setAuthError("Enter your full name for signup");
       return;
     }
 
@@ -95,18 +96,16 @@ const Index = () => {
       if (isSignup) {
         // Sign Up: Send OTP
         await sendOtp(phone, fullName.trim());
-        toast.success("OTP sent to " + phone);
         setAuthStep("otp");
         setOtpCountdown(300);
         startCountdown();
       } else {
         // Sign In: Direct login with phone only, NO OTP
         const session = await signIn(phone);
-        toast.success("Logged in!");
         navigate("/dashboard", { replace: true });
       }
     } catch (err: any) {
-      toast.error(err.message || isSignup ? "Failed to send OTP" : "Failed to sign in");
+      setAuthError(err?.message || (isSignup ? "Failed to send OTP" : "Failed to sign in"));
     } finally {
       setAuthLoading(false);
     }
@@ -114,17 +113,17 @@ const Index = () => {
 
   const verifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
     if (otp.length !== 6) {
-      toast.error("Enter 6-digit OTP");
+      setAuthError("Enter 6-digit OTP");
       return;
     }
     setAuthLoading(true);
     try {
       const session = await verifyOtp(phone, otp, fullName);
-      toast.success("Logged in!");
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
-      toast.error(err.message || "Invalid OTP");
+      setAuthError(err?.message || "Invalid OTP");
     } finally {
       setAuthLoading(false);
     }
