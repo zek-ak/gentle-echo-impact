@@ -19,7 +19,7 @@ const ease: [number, number, number, number] = [0.22, 1, 0.36, 1];
 const Typewriter = ({
   text,
   play,
-  speed = 18,
+  speed = 36,
   startDelay = 0,
   className,
 }: {
@@ -36,21 +36,29 @@ const Typewriter = ({
       setShown(text.length);
       return;
     }
+
     setShown(0);
-    let intervalId: number | undefined;
+    let frameId: number | undefined;
+    let startAt: number | null = null;
+
+    const step = (timestamp: number) => {
+      if (startAt === null) startAt = timestamp;
+
+      const nextShown = Math.min(text.length, Math.floor((timestamp - startAt) / speed) + 1);
+      setShown((current) => (current === nextShown ? current : nextShown));
+
+      if (nextShown < text.length) {
+        frameId = window.requestAnimationFrame(step);
+      }
+    };
+
     const timeoutId = window.setTimeout(() => {
-      let i = 0;
-      intervalId = window.setInterval(() => {
-        i += 1;
-        setShown(i);
-        if (i >= text.length && intervalId !== undefined) {
-          window.clearInterval(intervalId);
-        }
-      }, speed);
+      frameId = window.requestAnimationFrame(step);
     }, startDelay);
+
     return () => {
       window.clearTimeout(timeoutId);
-      if (intervalId !== undefined) window.clearInterval(intervalId);
+      if (frameId !== undefined) window.cancelAnimationFrame(frameId);
     };
   }, [text, play, speed, startDelay]);
 
@@ -70,8 +78,9 @@ const Typewriter = ({
 // Each text node gets a startDelay so they animate one after another.
 // `state.delay` accumulates ms across the whole subtree.
 const SPEED = 22;
-const PAUSE_INLINE = 80; // pause between inline text segments
-const PAUSE_BLOCK = 320; // pause between block-level elements (p, li, h4, div)
+const CONTENT_TYPING_START = 180;
+const PAUSE_INLINE = 110; // pause between inline text segments
+const PAUSE_BLOCK = 520; // pause between block-level elements (p, li, h4, div)
 
 const BLOCK_TAGS = new Set(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "div", "ul", "ol", "section"]);
 
@@ -121,7 +130,7 @@ const typewriteChildren = (
 const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: ExpandableCardProps) => {
   const contentId = `expandable-card-content-${index}`;
   const stateRef = useRef({ i: 0, delay: 0 });
-  stateRef.current = { i: 0, delay: 0 };
+  stateRef.current = { i: 0, delay: isExpanded ? CONTENT_TYPING_START : 0 };
   const animatedChildren = typewriteChildren(children, isExpanded, stateRef.current);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -144,30 +153,25 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
       onKeyDown={handleKeyDown}
       layout
       initial={false}
-      animate={isExpanded ? {
-        rotateY: 0,
-        scale: 1,
-        y: 0,
-        boxShadow: liftedShadow,
-      } : {
-        rotateY: [0, -8, 8, 0],
-        scale: [1, 0.995, 0.985, 1],
-        boxShadow: baseShadow,
+      animate={{
+        scale: isExpanded ? 1.008 : 1,
+        y: isExpanded ? -2 : 0,
+        boxShadow: isExpanded ? liftedShadow : baseShadow,
       }}
       transition={{
-        rotateY: { duration: 0.34, ease },
-        scale: { duration: 0.34, ease },
-        default: { duration: 0.38, ease },
+        layout: { duration: 0.58, ease },
+        scale: { duration: 0.56, ease },
+        y: { duration: 0.56, ease },
+        boxShadow: { duration: 0.56, ease },
       }}
       whileHover={{
-        y: -4,
+        y: isExpanded ? -3 : -4,
         boxShadow: liftedShadow,
       }}
       whileTap={{
-        scale: 0.982,
-        y: 1,
+        scale: 0.994,
       }}
-      className="relative overflow-hidden cursor-pointer rounded-2xl sm:rounded-[24px] border border-blue-900/40 bg-church-blue/95 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
+      className="relative overflow-hidden cursor-pointer rounded-2xl sm:rounded-[24px] border border-blue-900/40 bg-church-blue/95 transform-gpu will-change-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-4 focus-visible:ring-offset-slate-950"
       style={{
         background: "linear-gradient(145deg, rgba(12, 41, 92, 0.98) 0%, rgba(13, 55, 118, 0.98) 45%, rgba(10, 63, 146, 0.9) 100%)",
         backdropFilter: "blur(14px)",
@@ -200,7 +204,7 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
           </div>
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.25, ease }}
+            transition={{ duration: 0.42, ease }}
             className="text-white/85 flex-shrink-0"
           >
             <ChevronDown className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -220,7 +224,7 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ duration: 0.15 }}
+              transition={{ duration: 0.26, ease }}
               className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white border border-white/25 backdrop-blur-sm"
             >
               <X className="w-4 h-4" />
@@ -228,27 +232,33 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
           )}
         </AnimatePresence>
 
-        <motion.div
-          layout
-          className="overflow-hidden"
-          transition={{ duration: 0.42, ease }}
-        >
-          <AnimatePresence initial={false}>
+        <AnimatePresence initial={false}>
+          {isExpanded && (
             {isExpanded && (
               <motion.div
-                key="content"
-                id={contentId}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                transition={{ duration: 0.28, ease, delay: isExpanded ? 0.05 : 0 }}
-                className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
+                key="content-shell"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{
+                  height: { duration: 0.62, ease },
+                  opacity: { duration: 0.38, ease, delay: 0.08 },
+                }}
+                className="overflow-hidden"
               >
-                {animatedChildren}
+                <motion.div
+                  id={contentId}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.4, ease, delay: 0.12 }}
+                  className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
+                >
+                  {animatedChildren}
+                </motion.div>
               </motion.div>
             )}
-          </AnimatePresence>
-        </motion.div>
+        </AnimatePresence>
       </div>
     </motion.div>
   );
