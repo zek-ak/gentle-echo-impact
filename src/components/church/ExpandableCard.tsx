@@ -69,8 +69,11 @@ const Typewriter = ({
 // Recursively walk children and replace string nodes with <Typewriter>.
 // Each text node gets a startDelay so they animate one after another.
 // `state.delay` accumulates ms across the whole subtree.
-const SPEED = 18;
-const PAUSE_BETWEEN = 120; // small gap between sequential text nodes
+const SPEED = 22;
+const PAUSE_INLINE = 80; // pause between inline text segments
+const PAUSE_BLOCK = 320; // pause between block-level elements (p, li, h4, div)
+
+const BLOCK_TAGS = new Set(["p", "li", "h1", "h2", "h3", "h4", "h5", "h6", "div", "ul", "ol", "section"]);
 
 const typewriteChildren = (
   node: ReactNode,
@@ -82,7 +85,7 @@ const typewriteChildren = (
     if (!text.trim()) return node;
     state.i += 1;
     const myDelay = state.delay;
-    state.delay += text.length * SPEED + PAUSE_BETWEEN;
+    state.delay += text.length * SPEED + PAUSE_INLINE;
     return (
       <Typewriter
         key={`tw-${state.i}`}
@@ -104,7 +107,13 @@ const typewriteChildren = (
     if (type === "a" || type === "button") return node;
     const childChildren = (node.props as any).children;
     if (childChildren === undefined) return node;
-    return cloneElement(node, node.props as any, typewriteChildren(childChildren, play, state));
+    const cloned = cloneElement(node, node.props as any, typewriteChildren(childChildren, play, state));
+    // Add an extra pause after each block-level element so lines don't
+    // overlap with the next block (e.g. between <li> items).
+    if (typeof type === "string" && BLOCK_TAGS.has(type)) {
+      state.delay += PAUSE_BLOCK;
+    }
+    return cloned;
   }
   return node;
 };
