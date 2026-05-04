@@ -77,7 +77,7 @@ const Typewriter = ({
 // Recursively walk children and replace string nodes with <Typewriter>.
 // Each text node gets a startDelay so they animate one after another.
 // `state.delay` accumulates ms across the whole subtree.
-const SPEED = 22;
+const SPEED = 40;
 const CONTENT_TYPING_START = 180;
 const PAUSE_INLINE = 110; // pause between inline text segments
 const PAUSE_BLOCK = 520; // pause between block-level elements (p, li, h4, div)
