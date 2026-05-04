@@ -234,30 +234,29 @@ const ExpandableCard = ({ title, icon, children, isExpanded, onToggle, index }: 
 
         <AnimatePresence initial={false}>
           {isExpanded && (
-            {isExpanded && (
+            <motion.div
+              key="content-shell"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{
+                height: { duration: 0.62, ease },
+                opacity: { duration: 0.38, ease, delay: 0.08 },
+              }}
+              className="overflow-hidden"
+            >
               <motion.div
-                key="content-shell"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{
-                  height: { duration: 0.62, ease },
-                  opacity: { duration: 0.38, ease, delay: 0.08 },
-                }}
-                className="overflow-hidden"
+                id={contentId}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.4, ease, delay: 0.12 }}
+                className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
               >
-                <motion.div
-                  id={contentId}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.4, ease, delay: 0.12 }}
-                  className="px-4 sm:px-6 pb-5 sm:pb-6 pt-3 sm:pt-4 border-t border-white/15 max-h-[420px] sm:max-h-[480px] overflow-y-auto break-words [overflow-wrap:anywhere]"
-                >
-                  {animatedChildren}
-                </motion.div>
+                {animatedChildren}
               </motion.div>
-            )}
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </motion.div>
