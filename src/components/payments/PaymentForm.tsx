@@ -188,10 +188,22 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     }
   };
 
+  const finalReference =
+    reference === "Other" ? referenceOther.trim() : reference;
+
   const handleSubmit = async () => {
     const numericAmount = parseInt(amount, 10);
     if (!numericAmount || numericAmount < 500 || numericAmount > 3_000_000) {
       setErrorMsg("Enter a valid amount (TZS 500 – 3,000,000)");
+      return;
+    }
+
+    if (!reference) {
+      setErrorMsg("Chagua reference (Zaka, Sadaka, RM au Other)");
+      return;
+    }
+    if (reference === "Other" && !referenceOther.trim()) {
+      setErrorMsg("Tafadhali eleza reference yako");
       return;
     }
 
