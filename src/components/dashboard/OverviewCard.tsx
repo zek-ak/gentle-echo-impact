@@ -1,6 +1,6 @@
 import { useState, useEffect, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Target } from "lucide-react";
+import { Target, HandHeart } from "lucide-react";
 import SlideCard from "@/components/dashboard/SlideCard";
 
 interface OverviewCardProps {
@@ -10,6 +10,7 @@ interface OverviewCardProps {
   myRemainingGoal: number;
   currency?: string;
   interval?: number;
+  totalPledges?: number;
 }
 
 const OverviewCard = ({
@@ -19,6 +20,7 @@ const OverviewCard = ({
   myRemainingGoal,
   currency = "TZS",
   interval = 7000,
+  totalPledges,
 }: OverviewCardProps) => {
   const bgImages = ['/home.1.jpg', '/home.2.jpg', '/home.3.jpg'];
 
