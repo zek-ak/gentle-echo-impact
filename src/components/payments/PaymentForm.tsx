@@ -47,10 +47,18 @@ interface PaymentFormProps {
   isSimulated?: boolean;
 }
 
+const REFERENCE_OPTIONS = [
+  { value: "Zaka", label: "Zaka" },
+  { value: "Sadaka", label: "Sadaka" },
+  { value: "RM", label: "RM" },
+  { value: "Other", label: "Other" },
+];
+
 const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) => {
   const [paymentType, setPaymentType] = useState<PaymentType>("mobile_money");
   const [phone, setPhone] = useState("");
   const [reference, setReference] = useState("");
+  const [referenceOther, setReferenceOther] = useState("");
   const [amount, setAmount] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
@@ -147,6 +155,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     setPaymentState("form");
     setPhone("");
     setReference("");
+    setReferenceOther("");
     setAmount("");
     setSelectedMobileMethod(null);
     setErrorMsg("");
@@ -179,10 +188,22 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     }
   };
 
+  const finalReference =
+    reference === "Other" ? referenceOther.trim() : reference;
+
   const handleSubmit = async () => {
     const numericAmount = parseInt(amount, 10);
     if (!numericAmount || numericAmount < 500 || numericAmount > 3_000_000) {
       setErrorMsg("Enter a valid amount (TZS 500 – 3,000,000)");
+      return;
+    }
+
+    if (!reference) {
+      setErrorMsg("Chagua reference (Zaka, Sadaka, RM au Other)");
+      return;
+    }
+    if (reference === "Other" && !referenceOther.trim()) {
+      setErrorMsg("Tafadhali eleza reference yako");
       return;
     }
 
@@ -207,7 +228,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
           body: {
             amount: numericAmount,
             userId: userId ?? null,
-            reference: reference || null,
+            reference: finalReference || null,
             customerName: customerName || null,
           },
         });
@@ -267,7 +288,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
           amount: numericAmount,
           phone: cleanPhone,
           userId: userId ?? null,
-          reference: reference || null,
+          reference: finalReference || null,
         },
       });
 
@@ -459,18 +480,29 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
             </div>
 
             <div>
-              <label className="text-xs sm:text-sm font-semibold text-white">
-                Reference <span className="text-white/40 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="text"
+              <label className="text-xs sm:text-sm font-semibold text-white">Reference</label>
+              <select
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="e.g., Tithe, Offering"
                 disabled={paymentState !== "form"}
-                maxLength={100}
                 className="w-full h-10 sm:h-11 mt-1 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
-              />
+              >
+                <option value="">-- Chagua reference --</option>
+                {REFERENCE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {reference === "Other" && (
+                <input
+                  type="text"
+                  value={referenceOther}
+                  onChange={(e) => setReferenceOther(e.target.value)}
+                  placeholder="Eleza reference yako"
+                  disabled={paymentState !== "form"}
+                  maxLength={100}
+                  className="w-full h-10 sm:h-11 mt-2 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
+                />
+              )}
             </div>
 
             <div>
@@ -531,18 +563,29 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
             </div>
 
             <div>
-              <label className="text-xs sm:text-sm font-semibold text-white">
-                Reference <span className="text-white/40 font-normal">(Optional)</span>
-              </label>
-              <input
-                type="text"
+              <label className="text-xs sm:text-sm font-semibold text-white">Reference</label>
+              <select
                 value={reference}
                 onChange={(e) => setReference(e.target.value)}
-                placeholder="e.g., Tithe, Offering"
                 disabled={paymentState !== "form"}
-                maxLength={100}
                 className="w-full h-10 sm:h-11 mt-1 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
-              />
+              >
+                <option value="">-- Chagua reference --</option>
+                {REFERENCE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              {reference === "Other" && (
+                <input
+                  type="text"
+                  value={referenceOther}
+                  onChange={(e) => setReferenceOther(e.target.value)}
+                  placeholder="Eleza reference yako"
+                  disabled={paymentState !== "form"}
+                  maxLength={100}
+                  className="w-full h-10 sm:h-11 mt-2 px-3 rounded-xl border-2 bg-white/95 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-white/20 border-border/50 focus:border-gold disabled:opacity-60"
+                />
+              )}
             </div>
           </motion.div>
         )}
