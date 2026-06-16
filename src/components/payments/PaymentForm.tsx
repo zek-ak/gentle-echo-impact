@@ -47,10 +47,18 @@ interface PaymentFormProps {
   isSimulated?: boolean;
 }
 
+const REFERENCE_OPTIONS = [
+  { value: "Zaka", label: "Zaka" },
+  { value: "Sadaka", label: "Sadaka" },
+  { value: "RM", label: "RM" },
+  { value: "Other", label: "Other" },
+];
+
 const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) => {
   const [paymentType, setPaymentType] = useState<PaymentType>("mobile_money");
   const [phone, setPhone] = useState("");
   const [reference, setReference] = useState("");
+  const [referenceOther, setReferenceOther] = useState("");
   const [amount, setAmount] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [selectedMobileMethod, setSelectedMobileMethod] = useState<string | null>(null);
