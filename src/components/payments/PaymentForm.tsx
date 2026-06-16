@@ -155,6 +155,7 @@ const PaymentForm = ({ userId = null, isSimulated = false }: PaymentFormProps) =
     setPaymentState("form");
     setPhone("");
     setReference("");
+    setReferenceOther("");
     setAmount("");
     setSelectedMobileMethod(null);
     setErrorMsg("");
