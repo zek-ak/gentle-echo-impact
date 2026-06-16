@@ -97,6 +97,28 @@ const OverviewCard = ({
     },
   ];
 
+  if (typeof totalPledges === "number") {
+    slides.push({
+      id: "totalPledges",
+      bg: bgImages[0],
+      content: (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-white font-bold text-lg sm:text-xl">Total Pledges (All Members)</p>
+              <h2 className="text-white font-bold text-4xl sm:text-5xl mt-1">
+                {currency} {totalPledges.toLocaleString()}
+              </h2>
+            </div>
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center">
+              <HandHeart className="w-6 h-6 text-amber-400" />
+            </div>
+          </div>
+        </>
+      ),
+    });
+  }
+
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
