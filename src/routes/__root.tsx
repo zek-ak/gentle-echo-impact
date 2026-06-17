@@ -62,6 +62,8 @@ export const Route = createRootRoute({
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "manifest", href: "/manifest.webmanifest" },
+      { rel: "apple-touch-icon", href: "/sdaLogo.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -73,6 +75,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <meta name="theme-color" content="#0b0f1a" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="SDA Contribute" />
         <HeadContent />
       </head>
       <body>
@@ -84,12 +90,18 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
-          <Outlet />
+          <PWAGate>
+            <Outlet />
+          </PWAGate>
         </TooltipProvider>
       </AuthProvider>
     </QueryClientProvider>
