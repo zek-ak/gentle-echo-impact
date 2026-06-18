@@ -75,6 +75,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=new URLSearchParams(location.search);var standalone=(window.navigator&&window.navigator.standalone===true)||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||(window.matchMedia&&window.matchMedia('(display-mode: fullscreen)').matches)||(window.matchMedia&&window.matchMedia('(display-mode: minimal-ui)').matches);if(p.get('pwa')==='1'||standalone){document.documentElement.classList.add('pwa-booting');}}catch(e){}})();`,
+          }}
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `html.pwa-booting body{background:#05070d;}html.pwa-booting #app-root{visibility:hidden;}`,
+          }}
+        />
         <meta name="theme-color" content="#0b0f1a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -95,15 +105,17 @@ function RootComponent() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <PWAGate>
-            <Outlet />
-          </PWAGate>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <div id="app-root">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <PWAGate>
+              <Outlet />
+            </PWAGate>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </div>
   );
 }

@@ -40,6 +40,12 @@ export function isStandalonePWA(): boolean {
   return false;
 }
 
+export function isPWAEntryExperience(): boolean {
+  if (typeof window === "undefined") return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("pwa") === "1" || isStandalonePWA();
+}
+
 export async function registerServiceWorker(): Promise<void> {
   if (typeof window === "undefined") return;
   if (!("serviceWorker" in navigator)) return;
