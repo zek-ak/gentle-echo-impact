@@ -75,6 +75,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=new URLSearchParams(location.search);var standalone=(window.navigator&&window.navigator.standalone===true)||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||(window.matchMedia&&window.matchMedia('(display-mode: fullscreen)').matches)||(window.matchMedia&&window.matchMedia('(display-mode: minimal-ui)').matches);if(p.get('pwa')==='1'||standalone){document.documentElement.classList.add('pwa-booting');}}catch(e){}})();`,
+          }}
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `#pwa-boot-splash{display:none;}html.pwa-booting body{background:#05070d;}html.pwa-booting #app-root{visibility:hidden;}html.pwa-booting #pwa-boot-splash{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at top,#1a2238 0%,#0b0f1a 60%,#05070d 100%);color:white;text-align:center;font-family:'Plus Jakarta Sans',system-ui,sans-serif;padding:2rem;}html.pwa-booting #pwa-boot-splash img{width:128px;height:128px;margin-bottom:24px;border-radius:24px;}html.pwa-booting #pwa-boot-splash h1{font-size:1.6rem;font-weight:700;margin:0;letter-spacing:0;}`,
+          }}
+        />
         <meta name="theme-color" content="#0b0f1a" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -82,6 +92,10 @@ function RootShell({ children }: { children: React.ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        <div id="pwa-boot-splash" aria-hidden="true">
+          <img src="/sdaLogo.png" alt="" />
+          <h1>Chuo Kikuu SDA Church</h1>
+        </div>
         {children}
         <Scripts />
       </body>
@@ -95,15 +109,17 @@ function RootComponent() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <PWAGate>
-            <Outlet />
-          </PWAGate>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <div id="app-root">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <PWAGate>
+              <Outlet />
+            </PWAGate>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </div>
   );
 }
