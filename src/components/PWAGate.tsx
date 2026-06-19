@@ -213,21 +213,13 @@ export default function PWAGate({ children }: { children: React.ReactNode }) {
       <img
         src="/sdaLogo.png"
         alt="Chuo Kikuu SDA Church"
-        style={{ width: 96, height: 96, marginBottom: 20, borderRadius: 16 }}
+        style={{ width: 128, height: 128, marginBottom: 24, borderRadius: 24 }}
       />
-      <h1 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: 6 }}>
+      <h1 style={{ fontSize: "1.6rem", fontWeight: 700, margin: 0 }}>
         Chuo Kikuu SDA Church
       </h1>
-      <p
-        style={{
-          opacity: 0.7,
-          marginBottom: 40,
-          maxWidth: 320,
-          lineHeight: 1.5,
-          fontSize: "0.95rem",
-        }}
-      >
-        Tap below to make your contribution.
+      <p style={{ opacity: 0.7, marginTop: 8, marginBottom: 40, fontSize: "0.9rem" }}>
+        Resource Mobilization
       </p>
       <button
         onClick={() => setShowPicker(true)}
