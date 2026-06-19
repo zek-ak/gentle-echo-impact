@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import confetti from "canvas-confetti";
 import { getSession, clearSession } from "@/lib/auth";
+import { isPWAEntryExperience, isStandalonePWA } from "@/lib/pwa";
 import { Button } from "@/components/ui/button";
 import { useMemberDashboard, usePublicDashboard } from "@/hooks/useChurchData";
 import { createSupabaseClient } from "../lib/supabase/client.ts";
